@@ -23,6 +23,7 @@ website_route_rules = [
     {"from_route": "/git-analyzer", "to_route": "dashboard"},
     {"from_route": "/git-analyzer/dashboard", "to_route": "dashboard"},
     {"from_route": "/git-analyzer/new", "to_route": "new-analysis"},
+    {"from_route": "/git-analyzer/new-analysis", "to_route": "new-analysis"},
     {"from_route": "/git-analyzer/results", "to_route": "results"},
     {"from_route": "/git-analyzer/history", "to_route": "history"},
     {"from_route": "/git-analyzer/settings", "to_route": "settings"},
