@@ -6,6 +6,7 @@ def get_context(context):
 
     context.analyses = frappe.get_all(
         "Repo Analysis",
+        filters={"owner": frappe.session.user},
         fields=["name", "repo_name", "github_url", "status", "creation",
                 "file_count", "groq_model", "purpose", "tech_stack"],
         order_by="creation desc",

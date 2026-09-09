@@ -31,7 +31,8 @@
  "module": "Git Analyzer",
  "name": "Analysis Settings",
  "owner": "Administrator",
- "permissions": [
-  {"role": "System Manager", "read": 1, "write": 1, "create": 1}
- ]
+  "permissions": [
+   {"role": "System Manager", "read": 1, "write": 1, "create": 1},
+   {"role": "Website User", "read": 1, "write": 1}
+  ]
 }

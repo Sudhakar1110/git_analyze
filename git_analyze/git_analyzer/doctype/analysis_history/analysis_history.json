@@ -36,7 +36,8 @@
  "name": "Analysis History",
  "owner": "Administrator",
  "permissions": [
-  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1}
+  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+  {"role": "Website User", "read": 1, "create": 1}
  ],
  "sort_field": "timestamp",
  "sort_order": "DESC",
