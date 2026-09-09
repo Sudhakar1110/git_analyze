@@ -166,6 +166,44 @@ function showToast(message, type) {
     setTimeout(function() { toast.className = 'toast'; }, 4000);
 }
 
+function pollStatus(name) {
+    var attempts = 0;
+    var maxAttempts = 120;
+    var interval = setInterval(function() {
+        attempts++;
+        if (attempts > maxAttempts) {
+            clearInterval(interval);
+            showToast('Analysis is taking longer. Redirecting to results...', 'success');
+            window.location.href = '/git-analyzer/results';
+            return;
+        }
+        fetch('/api/method/git_analyze.api.get_analysis_status', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Frappe-CSRF-Token': '{{ frappe.session.csrf_token or "" }}'
+            },
+            body: JSON.stringify({ repo_analysis_name: name })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.message) {
+                var st = data.message.status;
+                if (st === 'Completed') {
+                    clearInterval(interval);
+                    showToast('Analysis completed!', 'success');
+                    window.location.href = '/git-analyzer/results';
+                } else if (st === 'Failed') {
+                    clearInterval(interval);
+                    showToast('Analysis failed. Check results page.', 'error');
+                    window.location.href = '/git-analyzer/results';
+                }
+            }
+        })
+        .catch(function() {});
+    }, 3000);
+}
+
 document.getElementById('analysisForm').addEventListener('submit', function(e) {
     e.preventDefault();
     var btn = document.getElementById('submitBtn');
@@ -203,16 +241,13 @@ document.getElementById('analysisForm').addEventListener('submit', function(e) {
             showToast(data.message.error, 'error');
             btn.disabled = false;
             overlay.classList.remove('active');
-        } else if (data.message && data.message.status === 'success') {
-            showToast('Analysis completed!', 'success');
-            setTimeout(function() {
-                window.location.href = '/git-analyzer/results';
-            }, 1000);
+        } else if (data.message && data.message.repo_analysis) {
+            showToast('Analysis started! Polling for results...', 'success');
+            pollStatus(data.message.repo_analysis);
         } else {
-            showToast('Analysis started. Check results page.', 'success');
-            setTimeout(function() {
-                window.location.href = '/git-analyzer/results';
-            }, 1000);
+            showToast('Unknown response. Check results page.', 'error');
+            btn.disabled = false;
+            overlay.classList.remove('active');
         }
     })
     .catch(function(err) {

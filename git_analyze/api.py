@@ -41,18 +41,15 @@ def analyze_repo(github_url, branch="main", depth="medium", questions=""):
     repo_analysis.insert(ignore_permissions=True)
     frappe.db.commit()
 
-    try:
-        run_analysis(
-            repo_analysis_name=repo_analysis.name,
-            github_url=github_url,
-            branch=branch,
-            max_files=max_files,
-        )
-    except Exception as e:
-        frappe.db.set_value("Repo Analysis", repo_analysis.name, "status", "Failed")
-        frappe.db.commit()
-        frappe.log_error(f"Analysis failed: {str(e)}")
-        return {"status": "error", "error": str(e), "repo_analysis": repo_analysis.name}
+    frappe.enqueue(
+        "git_analyze.api.run_analysis",
+        repo_analysis_name=repo_analysis.name,
+        github_url=github_url,
+        branch=branch,
+        max_files=max_files,
+        queue="default",
+        timeout=1800,
+    )
 
     return {"status": "success", "repo_analysis": repo_analysis.name, "name": repo_analysis.name}
 
