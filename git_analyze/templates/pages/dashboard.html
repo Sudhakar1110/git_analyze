@@ -1,122 +1,31 @@
-{% extends "git_analyze/templates/pages/portal.html" %}
-
-{% block page_content %}
-{% set active_page = "dashboard" %}
-
+{% from "git_analyze/templates/pages/macros.html" import ga_sidebar, ga_scripts %}
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Git Analyzer</title></head>
+<body>
+<div class="ga-portal">
+{{ ga_sidebar('dashboard') }}
+<main class="ga-main-content">
+<div class="ga-content-wrapper">
 <div class="ga-page-header">
-    <div>
-        <h1 class="ga-page-title">Welcome back, {{ frappe.session.full_name or 'Administrator' }}</h1>
-        <p class="ga-page-subtitle">Your repository analysis at a glance.</p>
-    </div>
-    <a href="/git-analyzer/new" class="ga-btn ga-btn-primary">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        New Analysis
-    </a>
+    <div><h1 class="ga-page-title">Welcome back, {{ frappe.session.full_name or 'Administrator' }}</h1><p class="ga-page-subtitle">Your repository analysis at a glance.</p></div>
+    <a href="/git-analyzer/new" class="ga-btn ga-btn-primary">+ New Analysis</a>
 </div>
-
 <div class="ga-stats-grid">
-    <div class="ga-stat-card">
-        <div class="ga-stat-icon" style="background: #dbeafe; color: #2563eb;">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M3 7V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V7" stroke="currentColor" stroke-width="2"/><path d="M1 7H23M8 7V5C8 3.89543 8.89543 3 10 3H14C15.1046 3 16 3.89543 16 5V7" stroke="currentColor" stroke-width="2"/></svg>
-        </div>
-        <div class="ga-stat-content">
-            <span class="ga-stat-label">TOTAL ANALYSES</span>
-            <span class="ga-stat-value" id="total-analyses">{{ total_analyses or 0 }}</span>
-        </div>
-    </div>
-    <div class="ga-stat-card">
-        <div class="ga-stat-icon" style="background: #d1fae5; color: #059669;">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M9 12L11 14L15 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/></svg>
-        </div>
-        <div class="ga-stat-content">
-            <span class="ga-stat-label">COMPLETED</span>
-            <span class="ga-stat-value" id="completed-analyses">{{ completed_analyses or 0 }}</span>
-        </div>
-    </div>
-    <div class="ga-stat-card">
-        <div class="ga-stat-icon" style="background: #fef3c7; color: #d97706;">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M12 8V12L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        </div>
-        <div class="ga-stat-content">
-            <span class="ga-stat-label">IN PROGRESS</span>
-            <span class="ga-stat-value" id="in-progress-analyses">{{ in_progress_analyses or 0 }}</span>
-        </div>
-    </div>
-    <div class="ga-stat-card">
-        <div class="ga-stat-icon" style="background: #fce7f3; color: #db2777;">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 9V13M12 17H12.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/></svg>
-        </div>
-        <div class="ga-stat-content">
-            <span class="ga-stat-label">FAILED</span>
-            <span class="ga-stat-value" id="failed-analyses">{{ failed_analyses or 0 }}</span>
-        </div>
-    </div>
+    <div class="ga-stat-card"><div class="ga-stat-icon" style="background:#dbeafe;color:#2563eb"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M3 7V17C3 18.1 3.9 19 5 19H19C20.1 19 21 18.1 21 17V7" stroke="currentColor" stroke-width="2"/></svg></div><div class="ga-stat-content"><span class="ga-stat-label">TOTAL ANALYSES</span><span class="ga-stat-value">{{ total_analyses or 0 }}</span></div></div>
+    <div class="ga-stat-card"><div class="ga-stat-icon" style="background:#d1fae5;color:#059669"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M9 12L11 14L15 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/></svg></div><div class="ga-stat-content"><span class="ga-stat-label">COMPLETED</span><span class="ga-stat-value">{{ completed_analyses or 0 }}</span></div></div>
+    <div class="ga-stat-card"><div class="ga-stat-icon" style="background:#fef3c7;color:#d97706"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M12 8V12L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><div class="ga-stat-content"><span class="ga-stat-label">IN PROGRESS</span><span class="ga-stat-value">{{ in_progress_analyses or 0 }}</span></div></div>
+    <div class="ga-stat-card"><div class="ga-stat-icon" style="background:#fce7f3;color:#db2777"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 9V13M12 17H12.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/></svg></div><div class="ga-stat-content"><span class="ga-stat-label">FAILED</span><span class="ga-stat-value">{{ failed_analyses or 0 }}</span></div></div>
 </div>
-
 <div class="ga-grid-2">
-    <div class="ga-card">
-        <div class="ga-card-header">
-            <h3 class="ga-card-title">Recent Analyses</h3>
-            <a href="/git-analyzer/results" class="ga-link">View All</a>
-        </div>
-        <div class="ga-card-body">
-            {% if recent_analyses %}
-            {% for analysis in recent_analyses %}
-            <div class="ga-list-item">
-                <div class="ga-list-item-main">
-                    <span class="ga-list-title">{{ analysis.repo_name or analysis.name }}</span>
-                    <span class="ga-list-subtitle">{{ analysis.github_url }}</span>
-                </div>
-                <div class="ga-list-meta">
-                    <span class="ga-badge ga-badge-{{ analysis.status|lower|replace(' ', '-') }}">{{ analysis.status }}</span>
-                    <span class="ga-list-date">{{ analysis.get_formatted('creation', '%d %b %Y') }}</span>
-                </div>
-            </div>
-            {% endfor %}
-            {% else %}
-            <div class="ga-empty-state">
-                <svg width="48" height="48" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="24" fill="#f1f5f9"/><path d="M16 24L22 30L32 18" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                <p>No analyses yet. Start your first analysis!</p>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-    <div class="ga-card">
-        <div class="ga-card-header">
-            <h3 class="ga-card-title">Quick Actions</h3>
-        </div>
-        <div class="ga-card-body">
-            <a href="/git-analyzer/new" class="ga-action-card">
-                <div class="ga-action-icon" style="background: #dbeafe; color: #2563eb;">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-                </div>
-                <div class="ga-action-content">
-                    <span class="ga-action-title">New Analysis</span>
-                    <span class="ga-action-desc">Analyze a GitHub repository</span>
-                </div>
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M7 4L13 10L7 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </a>
-            <a href="/git-analyzer/settings" class="ga-action-card">
-                <div class="ga-action-icon" style="background: #d1fae5; color: #059669;">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M12 2V5M12 19V22M22 12H19M5 12H2M19.07 4.93L17.66 6.34M6.34 17.66L4.93 19.07M19.07 19.07L17.66 17.66M6.34 6.34L4.93 4.93" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-                </div>
-                <div class="ga-action-content">
-                    <span class="ga-action-title">Configure Settings</span>
-                    <span class="ga-action-desc">Setup API keys and preferences</span>
-                </div>
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M7 4L13 10L7 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </a>
-            <a href="/git-analyzer/history" class="ga-action-card">
-                <div class="ga-action-icon" style="background: #fef3c7; color: #d97706;">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M12 6V12L16 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-                </div>
-                <div class="ga-action-content">
-                    <span class="ga-action-title">View History</span>
-                    <span class="ga-action-desc">Browse past analysis requests</span>
-                </div>
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M7 4L13 10L7 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </a>
-        </div>
-    </div>
+    <div class="ga-card"><div class="ga-card-header"><h3 class="ga-card-title">Recent Analyses</h3><a href="/git-analyzer/results" class="ga-link">View All</a></div><div class="ga-card-body">
+        {% if recent_analyses %}{% for a in recent_analyses %}<div class="ga-list-item"><div class="ga-list-item-main"><span class="ga-list-title">{{ a.repo_name or a.name }}</span><span class="ga-list-subtitle">{{ a.github_url }}</span></div><div class="ga-list-meta"><span class="ga-badge ga-badge-{{ a.status|lower|replace(' ','-') }}">{{ a.status }}</span><span class="ga-list-date">{{ a.get_formatted('creation', '%d %b %Y') }}</span></div></div>{% endfor %}{% else %}<div class="ga-empty-state"><p>No analyses yet. Start your first analysis!</p></div>{% endif %}
+    </div></div>
+    <div class="ga-card"><div class="ga-card-header"><h3 class="ga-card-title">Quick Actions</h3></div><div class="ga-card-body">
+        <a href="/git-analyzer/new" class="ga-action-card"><div class="ga-action-icon" style="background:#dbeafe;color:#2563eb"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><div class="ga-action-content"><span class="ga-action-title">New Analysis</span><span class="ga-action-desc">Analyze a GitHub repository</span></div><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M7 4L13 10L7 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+        <a href="/git-analyzer/settings" class="ga-action-card"><div class="ga-action-icon" style="background:#d1fae5;color:#059669"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M12 2V5M12 19V22M22 12H19M5 12H2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><div class="ga-action-content"><span class="ga-action-title">Configure Settings</span><span class="ga-action-desc">Setup API keys and preferences</span></div><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M7 4L13 10L7 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+        <a href="/git-analyzer/history" class="ga-action-card"><div class="ga-action-icon" style="background:#fef3c7;color:#d97706"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M12 6V12L16 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><div class="ga-action-content"><span class="ga-action-title">View History</span><span class="ga-action-desc">Browse past analysis requests</span></div><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M7 4L13 10L7 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    </div></div>
 </div>
-{% endblock %}
+</div></main></div>
+{{ ga_scripts() }}
+</body></html>

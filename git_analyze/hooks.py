@@ -7,9 +7,6 @@ app_license = "MIT"
 
 after_install = "git_analyze.install.after_install"
 
-app_include_css = "/assets/git_analyze/css/git_analyzer.css"
-app_include_js = "/assets/git_analyze/js/git_analyzer.js"
-
 doc_events = {
     "Repo Analysis": {
         "on_submit": "git_analyze.api.run_analysis_on_submit",

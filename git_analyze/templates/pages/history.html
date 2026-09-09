@@ -1,53 +1,19 @@
-{% extends "git_analyze/templates/pages/portal.html" %}
-
-{% block page_content %}
-{% set active_page = "history" %}
-
-<div class="ga-page-header">
-    <div>
-        <h1 class="ga-page-title">Analysis History</h1>
-        <p class="ga-page-subtitle">Track all API requests and analysis operations.</p>
-    </div>
-</div>
-
-<div class="ga-card">
-    <div class="ga-card-body">
-        {% if history %}
-        <div class="ga-table-wrapper">
-            <table class="ga-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Analysis</th>
-                        <th>Type</th>
-                        <th>Status</th>
-                        <th>Tokens</th>
-                        <th>Time</th>
-                        <th>Timestamp</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for h in history %}
-                    <tr>
-                        <td><code>{{ h.name }}</code></td>
-                        <td>{{ h.repo_analysis }}</td>
-                        <td><span class="ga-type-badge">{{ h.request_type }}</span></td>
-                        <td><span class="ga-badge ga-badge-{{ h.status|lower|replace(' ', '-') }}">{{ h.status }}</span></td>
-                        <td>{{ h.token_usage or 0 }}</td>
-                        <td>{{ "%.1f"|format(h.response_time or 0) }}s</td>
-                        <td>{{ h.get_formatted('timestamp', '%d %b %Y %H:%M') }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <div class="ga-empty-state">
-            <svg width="64" height="64" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="32" fill="#f1f5f9"/><path d="M32 18V32L40 36" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/></svg>
-            <h3>No history yet</h3>
-            <p>API request history will appear here after your first analysis.</p>
-        </div>
-        {% endif %}
-    </div>
-</div>
-{% endblock %}
+{% from "git_analyze/templates/pages/macros.html" import ga_sidebar, ga_scripts %}
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>History - Git Analyzer</title></head>
+<body>
+<div class="ga-portal">
+{{ ga_sidebar('history') }}
+<main class="ga-main-content">
+<div class="ga-content-wrapper">
+<div class="ga-page-header"><div><h1 class="ga-page-title">Analysis History</h1><p class="ga-page-subtitle">Track all API requests and analysis operations.</p></div></div>
+<div class="ga-card"><div class="ga-card-body">
+{% if history %}
+<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left;padding:12px 16px;font-size:12px;font-weight:600;color:var(--ga-text-light);text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--ga-border)">ID</th><th style="text-align:left;padding:12px 16px;font-size:12px;font-weight:600;color:var(--ga-text-light);text-transform:uppercase;border-bottom:2px solid var(--ga-border)">Analysis</th><th style="text-align:left;padding:12px 16px;font-size:12px;font-weight:600;color:var(--ga-text-light);text-transform:uppercase;border-bottom:2px solid var(--ga-border)">Type</th><th style="text-align:left;padding:12px 16px;font-size:12px;font-weight:600;color:var(--ga-text-light);text-transform:uppercase;border-bottom:2px solid var(--ga-border)">Status</th><th style="text-align:left;padding:12px 16px;font-size:12px;font-weight:600;color:var(--ga-text-light);text-transform:uppercase;border-bottom:2px solid var(--ga-border)">Tokens</th><th style="text-align:left;padding:12px 16px;font-size:12px;font-weight:600;color:var(--ga-text-light);text-transform:uppercase;border-bottom:2px solid var(--ga-border)">Time</th><th style="text-align:left;padding:12px 16px;font-size:12px;font-weight:600;color:var(--ga-text-light);text-transform:uppercase;border-bottom:2px solid var(--ga-border)">Timestamp</th></tr></thead><tbody>
+{% for h in history %}<tr><td style="padding:14px 16px;font-size:14px;border-bottom:1px solid var(--ga-border)"><code style="background:var(--ga-bg);padding:2px 6px;border-radius:4px;font-size:12px">{{ h.name }}</code></td><td style="padding:14px 16px;font-size:14px;border-bottom:1px solid var(--ga-border)">{{ h.repo_analysis }}</td><td style="padding:14px 16px;font-size:14px;border-bottom:1px solid var(--ga-border)"><span style="display:inline-flex;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:#e0e7ff;color:#3730a3">{{ h.request_type }}</span></td><td style="padding:14px 16px;font-size:14px;border-bottom:1px solid var(--ga-border)"><span class="ga-badge ga-badge-{{ h.status|lower|replace(' ','-') }}">{{ h.status }}</span></td><td style="padding:14px 16px;font-size:14px;border-bottom:1px solid var(--ga-border)">{{ h.token_usage or 0 }}</td><td style="padding:14px 16px;font-size:14px;border-bottom:1px solid var(--ga-border)">{{ "%.1f"|format(h.response_time or 0) }}s</td><td style="padding:14px 16px;font-size:14px;border-bottom:1px solid var(--ga-border)">{{ h.get_formatted('timestamp', '%d %b %Y %H:%M') }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% else %}<div class="ga-empty-state"><h3>No history yet</h3><p>API request history will appear here after your first analysis.</p></div>{% endif %}
+</div></div>
+</div></main></div>
+{{ ga_scripts() }}
+</body></html>
