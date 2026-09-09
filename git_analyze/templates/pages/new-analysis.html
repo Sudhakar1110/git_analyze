@@ -1,0 +1,68 @@
+{% extends "git_analyze/templates/pages/portal.html" %}
+
+{% block page_content %}
+{% set active_page = "new" %}
+
+<div class="ga-page-header">
+    <div>
+        <h1 class="ga-page-title">New Analysis</h1>
+        <p class="ga-page-subtitle">Analyze a GitHub repository using AI-powered insights.</p>
+    </div>
+</div>
+
+<div class="ga-card ga-card-lg">
+    <div class="ga-card-body">
+        <form id="analysis-form" class="ga-form">
+            <div class="ga-form-group">
+                <label class="ga-label">GitHub Repository URL <span class="ga-required">*</span></label>
+                <div class="ga-input-wrapper">
+                    <svg class="ga-input-icon" width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2C5.58172 2 2 5.58172 2 10C2 13.5447 4.29167 16.5277 7.5 17.5927V14.5C7.5 14.5 7 14 7 12.5C7 11 7.5 10 8.5 10C9 10 9.2 9.7 9.5 9.2C9.5 9.2 10 8 11 8C12.5 8 13 9 13 10.5C13 12 12.5 13 12.5 14.5V17.5927C15.7083 16.5277 18 13.5447 18 10C18 5.58172 14.4183 2 10 2Z" stroke="currentColor" stroke-width="1.5"/></svg>
+                    <input type="url" id="github-url" name="github_url" class="ga-input" placeholder="https://github.com/owner/repo" required>
+                </div>
+                <span class="ga-hint">Enter the full GitHub repository URL</span>
+            </div>
+
+            <div class="ga-form-row">
+                <div class="ga-form-group">
+                    <label class="ga-label">Branch</label>
+                    <input type="text" id="branch" name="branch" class="ga-input" placeholder="main" value="main">
+                </div>
+                <div class="ga-form-group">
+                    <label class="ga-label">Analysis Depth</label>
+                    <select id="depth" name="depth" class="ga-input ga-select">
+                        <option value="quick">Quick (50 files max)</option>
+                        <option value="standard" selected>Standard (100 files max)</option>
+                        <option value="deep">Deep (200 files max)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="ga-form-group">
+                <label class="ga-label">Specific Questions (Optional)</label>
+                <textarea id="questions" name="questions" class="ga-input ga-textarea" rows="3" placeholder="Any specific questions about the codebase?"></textarea>
+            </div>
+
+            <div class="ga-form-actions">
+                <button type="button" class="ga-btn ga-btn-secondary" onclick="window.location.href='/git-analyzer'">Cancel</button>
+                <button type="submit" id="submit-btn" class="ga-btn ga-btn-primary">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8L8 2L14 8M8 2V14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Start Analysis
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="ga-card" id="analysis-progress" style="display:none;">
+    <div class="ga-card-body">
+        <div class="ga-progress-container">
+            <div class="ga-progress-spinner"></div>
+            <h3 class="ga-progress-title">Analyzing Repository...</h3>
+            <p class="ga-progress-text" id="progress-text">Fetching repository files...</p>
+            <div class="ga-progress-bar">
+                <div class="ga-progress-fill" id="progress-fill" style="width: 0%"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

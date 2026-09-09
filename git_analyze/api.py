@@ -15,7 +15,7 @@ def run_analysis_on_submit(doc, method):
 
 
 @frappe.whitelist()
-def analyze_repo(github_url, branch="main"):
+def analyze_repo(github_url, branch="main", depth="standard", questions=""):
     if not github_url:
         frappe.throw(_("GitHub URL is required"))
     if "github.com" not in github_url:
@@ -24,6 +24,8 @@ def analyze_repo(github_url, branch="main"):
     settings = frappe.get_single_doc("Analysis Settings")
     if not settings.groq_api_key:
         frappe.throw(_("Please configure Groq API key in Analysis Settings"))
+
+    max_files = {"quick": 50, "standard": 100, "deep": 200}.get(depth, 100)
 
     repo_analysis = frappe.get_doc({
         "doctype": "Repo Analysis",
@@ -43,7 +45,27 @@ def analyze_repo(github_url, branch="main"):
         timeout=1800,
     )
 
-    return {"status": "success", "repo_analysis": repo_analysis.name}
+    return {"status": "success", "repo_analysis": repo_analysis.name, "name": repo_analysis.name}
+
+
+@frappe.whitelist()
+def save_settings(groq_api_key=None, groq_model=None, max_files_limit=None, output_language=None, github_token=None):
+    settings = frappe.get_single_doc("Analysis Settings")
+
+    if groq_api_key is not None:
+        settings.groq_api_key = groq_api_key
+    if groq_model is not None:
+        settings.groq_model = groq_model
+    if max_files_limit is not None:
+        settings.max_files_limit = int(max_files_limit)
+    if output_language is not None:
+        settings.output_language = output_language
+    if github_token is not None:
+        settings.github_token = github_token
+
+    settings.save(ignore_permissions=True)
+    frappe.db.commit()
+    return {"status": "success"}
 
 
 def run_analysis(repo_analysis_name, github_url, branch="main"):

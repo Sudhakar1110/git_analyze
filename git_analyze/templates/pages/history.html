@@ -1,0 +1,53 @@
+{% extends "git_analyze/templates/pages/portal.html" %}
+
+{% block page_content %}
+{% set active_page = "history" %}
+
+<div class="ga-page-header">
+    <div>
+        <h1 class="ga-page-title">Analysis History</h1>
+        <p class="ga-page-subtitle">Track all API requests and analysis operations.</p>
+    </div>
+</div>
+
+<div class="ga-card">
+    <div class="ga-card-body">
+        {% if history %}
+        <div class="ga-table-wrapper">
+            <table class="ga-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Analysis</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Tokens</th>
+                        <th>Time</th>
+                        <th>Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for h in history %}
+                    <tr>
+                        <td><code>{{ h.name }}</code></td>
+                        <td>{{ h.repo_analysis }}</td>
+                        <td><span class="ga-type-badge">{{ h.request_type }}</span></td>
+                        <td><span class="ga-badge ga-badge-{{ h.status|lower|replace(' ', '-') }}">{{ h.status }}</span></td>
+                        <td>{{ h.token_usage or 0 }}</td>
+                        <td>{{ "%.1f"|format(h.response_time or 0) }}s</td>
+                        <td>{{ h.get_formatted('timestamp', '%d %b %Y %H:%M') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="ga-empty-state">
+            <svg width="64" height="64" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="32" fill="#f1f5f9"/><path d="M32 18V32L40 36" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/></svg>
+            <h3>No history yet</h3>
+            <p>API request history will appear here after your first analysis.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
