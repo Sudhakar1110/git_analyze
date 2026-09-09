@@ -21,7 +21,7 @@ def analyze_repo(github_url, branch="main", depth="standard", questions=""):
     if "github.com" not in github_url:
         frappe.throw(_("Please enter a valid GitHub URL"))
 
-    settings = frappe.get_single_doc("Analysis Settings")
+    settings = frappe.get_doc("Analysis Settings", "Analysis Settings")
     if not settings.groq_api_key:
         frappe.throw(_("Please configure Groq API key in Analysis Settings"))
 
@@ -50,7 +50,7 @@ def analyze_repo(github_url, branch="main", depth="standard", questions=""):
 
 @frappe.whitelist()
 def save_settings(groq_api_key=None, groq_model=None, max_files_limit=None, output_language=None, github_token=None):
-    settings = frappe.get_single_doc("Analysis Settings")
+    settings = frappe.get_doc("Analysis Settings", "Analysis Settings")
 
     if groq_api_key is not None:
         settings.groq_api_key = groq_api_key
@@ -70,7 +70,7 @@ def save_settings(groq_api_key=None, groq_model=None, max_files_limit=None, outp
 
 def run_analysis(repo_analysis_name, github_url, branch="main"):
     start_time = time.time()
-    settings = frappe.get_single_doc("Analysis Settings")
+    settings = frappe.get_doc("Analysis Settings", "Analysis Settings")
 
     try:
         from git_analyze.github_fetcher import GitHubFetcher
@@ -133,7 +133,7 @@ def ask_followup(repo_analysis_name, question):
     if not repo_analysis_name or not question:
         frappe.throw(_("Both repo_analysis_name and question are required"))
 
-    settings = frappe.get_single_doc("Analysis Settings")
+    settings = frappe.get_doc("Analysis Settings", "Analysis Settings")
     repo_analysis = frappe.get_doc("Repo Analysis", repo_analysis_name)
 
     from git_analyze.groq_client import GroqClient
