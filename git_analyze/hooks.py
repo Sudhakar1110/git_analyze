@@ -19,8 +19,4 @@ scheduler_events = {
     ],
 }
 
-has_permission = {
-    "Repo Analysis": "git_analyze.has_permission",
-    "Analysis Settings": "git_analyze.has_permission",
-    "Analysis History": "git_analyze.has_permission",
-}
+
