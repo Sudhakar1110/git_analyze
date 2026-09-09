@@ -1,25 +1,259 @@
-{% from "git_analyze/templates/pages/macros.html" import ga_sidebar, ga_scripts %}
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Results - Git Analyzer</title></head>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Results - Git Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#f1f5f9;color:#1e293b;display:flex;min-height:100vh}
+.sidebar{width:260px;background:#0f172a;color:#e2e8f0;display:flex;flex-direction:column;position:fixed;height:100vh;z-index:100}
+.sidebar-brand{padding:24px 20px;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:12px}
+.sidebar-brand svg{width:32px;height:32px;color:#10b981}
+.sidebar-brand span{font-size:18px;font-weight:700;color:#fff}
+.sidebar-nav{flex:1;padding:16px 0}
+.nav-item{display:flex;align-items:center;gap:12px;padding:12px 20px;color:#94a3b8;text-decoration:none;font-size:14px;font-weight:500;transition:all 0.2s;position:relative;border-left:3px solid transparent}
+.nav-item:hover{color:#e2e8f0;background:#1e293b}
+.nav-item.active{color:#10b981;background:rgba(16,185,129,0.08);border-left-color:#10b981}
+.nav-item.active::before{content:'';position:absolute;left:-3px;top:50%;transform:translateY(-50%);width:8px;height:8px;background:#10b981;border-radius:50%}
+.nav-item svg{width:20px;height:20px;flex-shrink:0}
+.sidebar-footer{padding:16px 20px;border-top:1px solid #1e293b;font-size:12px;color:#64748b}
+.main-content{margin-left:260px;flex:1;padding:32px}
+.page-header{margin-bottom:32px;display:flex;align-items:center;justify-content:space-between}
+.page-header h1{font-size:28px;font-weight:700;color:#0f172a}
+.page-header p{color:#64748b;font-size:14px}
+.toolbar{display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+.tabs{display:flex;gap:4px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:4px}
+.tab{padding:8px 16px;border-radius:7px;font-size:13px;font-weight:500;color:#64748b;border:none;cursor:pointer;transition:all 0.2s;background:none;font-family:'Inter',sans-serif}
+.tab:hover{color:#1e293b}
+.tab.active{background:#10b981;color:#fff}
+.search-box{position:relative;flex:1;min-width:240px}
+.search-box input{width:100%;padding:10px 14px 10px 38px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:'Inter',sans-serif;color:#1e293b;background:#fff;transition:border-color 0.2s}
+.search-box input:focus{outline:none;border-color:#10b981}
+.search-box svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:#94a3b8}
+.card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(0,0,0,0.04);overflow:hidden}
+.table-wrapper{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+thead{background:#f8fafc}
+th{padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #e2e8f0}
+td{padding:14px 16px;font-size:14px;color:#1e293b;border-bottom:1px solid #f1f5f9}
+tr:hover{background:#f8fafc}
+.repo-name{font-weight:600;color:#0f172a}
+.repo-url{font-size:12px;color:#64748b;margin-top:2px}
+.status-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:500}
+.status-badge.completed{background:#ecfdf5;color:#059669}
+.status-badge.in-progress{background:#fffbeb;color:#d97706}
+.status-badge.failed{background:#fef2f2;color:#dc2626}
+.status-badge.pending{background:#f1f5f9;color:#64748b}
+.status-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
+.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500;background:#f1f5f9;color:#475569;margin-right:4px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:7px;font-size:13px;font-weight:500;border:none;cursor:pointer;transition:all 0.2s;text-decoration:none;font-family:'Inter',sans-serif}
+.btn-primary{background:#10b981;color:#fff}
+.btn-primary:hover{background:#059669}
+.btn-secondary{background:#f1f5f9;color:#475569;border:1px solid #e2e8f0}
+.btn-secondary:hover{background:#e2e8f0}
+.btn-sm{padding:6px 12px;font-size:12px}
+.actions-cell{display:flex;gap:6px}
+.empty-state{text-align:center;padding:60px 24px;color:#94a3b8}
+.empty-state svg{width:48px;height:48px;margin-bottom:12px;opacity:0.4}
+.empty-state p{font-size:14px}
+.user-bar{position:fixed;top:0;right:0;left:260px;height:56px;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:flex-end;padding:0 32px;z-index:50}
+.user-info{display:flex;align-items:center;gap:10px;font-size:14px;color:#475569}
+.user-avatar{width:32px;height:32px;border-radius:50%;background:#10b981;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600}
+.toast{position:fixed;top:24px;right:24px;padding:14px 20px;border-radius:10px;font-size:14px;font-weight:500;z-index:300;transform:translateX(120%);transition:transform 0.3s ease;box-shadow:0 8px 24px rgba(0,0,0,0.15)}
+.toast.show{transform:translateX(0)}
+.toast.success{background:#059669;color:#fff}
+.toast.error{background:#dc2626;color:#fff}
+</style>
+</head>
 <body>
-<div class="ga-portal">
-{{ ga_sidebar('results') }}
-<main class="ga-main-content">
-<div class="ga-content-wrapper">
-<div class="ga-page-header"><div><h1 class="ga-page-title">Analysis Results</h1><p class="ga-page-subtitle">View detailed analysis of your repositories.</p></div><a href="/git-analyzer/new" class="ga-btn ga-btn-primary">+ New Analysis</a></div>
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
-<div style="display:flex;gap:4px;background:var(--ga-card-bg);border:1px solid var(--ga-border);border-radius:var(--ga-radius-sm);padding:4px"><button class="ga-filter-tab active" data-filter="all" style="padding:8px 16px;border:none;background:var(--ga-primary);border-radius:6px;font-size:13px;font-weight:500;color:#fff;cursor:pointer">All</button><button class="ga-filter-tab" data-filter="completed" style="padding:8px 16px;border:none;background:transparent;border-radius:6px;font-size:13px;font-weight:500;color:var(--ga-text-light);cursor:pointer">Completed</button><button class="ga-filter-tab" data-filter="in-progress" style="padding:8px 16px;border:none;background:transparent;border-radius:6px;font-size:13px;font-weight:500;color:var(--ga-text-light);cursor:pointer">In Progress</button><button class="ga-filter-tab" data-filter="failed" style="padding:8px 16px;border:none;background:transparent;border-radius:6px;font-size:13px;font-weight:500;color:var(--ga-text-light);cursor:pointer">Failed</button></div>
-<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border:1px solid var(--ga-border);border-radius:var(--ga-radius-sm);background:var(--ga-card-bg)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><input type="text" id="search-results" placeholder="Search repositories..." style="border:none;outline:none;font-size:14px;width:200px;font-family:inherit"></div>
+<aside class="sidebar">
+<div class="sidebar-brand">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m-7-3.5l5.196-3m5.196-3L17 4.5M5 4.5l5.196 3m5.196 3L17 13.5"/></svg>
+<span>Git Analyzer</span>
 </div>
-<div style="display:flex;flex-direction:column;gap:16px">
-{% if analyses %}{% for a in analyses %}
-<div class="ga-result-card" data-status="{{ a.status|lower|replace(' ','-') }}" style="background:var(--ga-card-bg);border-radius:var(--ga-radius);padding:24px;box-shadow:var(--ga-shadow);border:1px solid var(--ga-border)">
-<div style="display:flex;justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:16px;font-weight:700">{{ a.repo_name or a.name }}</h3><p style="font-size:13px;color:var(--ga-text-light);margin-top:2px">{{ a.github_url }}</p></div><span class="ga-badge ga-badge-{{ a.status|lower|replace(' ','-') }}">{{ a.status }}</span></div>
-<div style="display:flex;gap:20px;margin-top:12px"><span style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ga-text-light)">{{ a.get_formatted('creation', '%d %b %Y %H:%M') }}</span>{% if a.file_count %}<span style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ga-text-light)">{{ a.file_count }} files</span>{% endif %}{% if a.groq_model %}<span style="font-size:13px;color:var(--ga-text-light)">{{ a.groq_model }}</span>{% endif %}</div>
-{% if a.status == 'Completed' %}<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--ga-border)"><div style="font-size:13px;color:var(--ga-text-light);line-height:1.6"><strong style="color:var(--ga-text)">Purpose:</strong> {{ (a.purpose or '')[:150] }}{% if a.purpose and a.purpose|length > 150 %}...{% endif %}</div><div style="font-size:13px;color:var(--ga-text-light);line-height:1.6"><strong style="color:var(--ga-text)">Tech Stack:</strong> {{ (a.tech_stack or '')[:150] }}{% if a.tech_stack and a.tech_stack|length > 150 %}...{% endif %}</div></div>{% endif %}
-<div style="display:flex;gap:8px;margin-top:16px"><a href="/app/repo-analysis/{{ a.name }}" class="ga-btn" style="padding:6px 14px;font-size:13px;border:1px solid var(--ga-border);border-radius:var(--ga-radius-sm);text-decoration:none;color:var(--ga-text);background:transparent">View Details</a>{% if a.status == 'Completed' %}<button class="ga-btn" onclick="exportAnalysis('{{ a.name }}')" style="padding:6px 14px;font-size:13px;border:1px solid var(--ga-border);border-radius:var(--ga-radius-sm);cursor:pointer;color:var(--ga-text);background:transparent">Export</button>{% endif %}</div>
-</div>{% endfor %}{% else %}<div class="ga-empty-state"><h3>No analyses found</h3><p>Start by analyzing your first repository.</p><a href="/git-analyzer/new" class="ga-btn ga-btn-primary" style="margin-top:16px">Start Analysis</a></div>{% endif %}
+<nav class="sidebar-nav">
+<a href="/git-analyzer/dashboard" class="nav-item">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+Dashboard
+</a>
+<a href="/git-analyzer/new-analysis" class="nav-item">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+New Analysis
+</a>
+<a href="/git-analyzer/results" class="nav-item active">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+Results
+</a>
+<a href="/git-analyzer/history" class="nav-item">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+History
+</a>
+<a href="/git-analyzer/settings" class="nav-item">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+Settings
+</a>
+</nav>
+<div class="sidebar-footer">Git Analyzer v1.0</div>
+</aside>
+
+<div class="user-bar">
+<div class="user-info">
+<span>{{ frappe.session.full_name or frappe.session.user }}</span>
+<div class="user-avatar">{{ (frappe.session.full_name or frappe.session.user)[0]|upper }}</div>
 </div>
-</div></main></div>
-{{ ga_scripts() }}
-</body></html>
+</div>
+
+<main class="main-content" style="margin-top:56px">
+<div class="page-header">
+<div>
+<h1>Analysis Results</h1>
+<p>{{ analyses|length }} total analyses</p>
+</div>
+<a href="/git-analyzer/new-analysis" class="btn btn-primary">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+New Analysis
+</a>
+</div>
+
+<div class="toolbar">
+<div class="tabs">
+<button class="tab active" data-filter="all" onclick="filterAnalyses('all', this)">All ({{ analyses|length }})</button>
+<button class="tab" data-filter="completed" onclick="filterAnalyses('completed', this)">Completed</button>
+<button class="tab" data-filter="in-progress" onclick="filterAnalyses('in-progress', this)">In Progress</button>
+<button class="tab" data-filter="failed" onclick="filterAnalyses('failed', this)">Failed</button>
+</div>
+<div class="search-box">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+<input type="text" placeholder="Search analyses..." oninput="searchAnalyses(this.value)">
+</div>
+</div>
+
+<div class="card">
+<div class="table-wrapper">
+<table>
+<thead>
+<tr>
+<th>Repository</th>
+<th>Status</th>
+<th>Files</th>
+<th>Model</th>
+<th>Created</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody id="analysesTable">
+{% if analyses %}
+{% for a in analyses %}
+<tr class="analysis-row" data-status="{{ a.status|lower|replace(' ', '-') }}" data-search="{{ (a.repo_name|lower ~ ' ' ~ a.github_url|lower ~ ' ' ~ (a.purpose or '')|lower ~ ' ' ~ (a.tech_stack or '')|lower) }}">
+<td>
+<div class="repo-name">{{ a.repo_name }}</div>
+<div class="repo-url">{{ a.github_url }}</div>
+</td>
+<td>
+<span class="status-badge {{ a.status|lower|replace(' ', '-') }}">{{ a.status }}</span>
+</td>
+<td>{{ a.file_count or 0 }}</td>
+<td><span class="tag">{{ a.groq_model or 'default' }}</span></td>
+<td>{{ a.creation }}</td>
+<td>
+<div class="actions-cell">
+<button class="btn btn-primary btn-sm" onclick="exportAnalysis('{{ a.name }}')">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+Export
+</button>
+</div>
+</td>
+</tr>
+{% endfor %}
+{% endif %}
+</tbody>
+</table>
+</div>
+{% if not analyses %}
+<div class="empty-state">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+<p>No analyses found. Start your first analysis!</p>
+</div>
+{% endif %}
+</div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function showToast(msg, type) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast ' + type + ' show';
+    setTimeout(function() { t.className = 'toast'; }, 4000);
+}
+
+var currentFilter = 'all';
+var currentSearch = '';
+
+function filterAnalyses(filter, tabEl) {
+    currentFilter = filter;
+    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+    tabEl.classList.add('active');
+    applyFilters();
+}
+
+function searchAnalyses(query) {
+    currentSearch = query.toLowerCase();
+    applyFilters();
+}
+
+function applyFilters() {
+    var rows = document.querySelectorAll('.analysis-row');
+    var visible = 0;
+    rows.forEach(function(row) {
+        var status = row.getAttribute('data-status');
+        var search = row.getAttribute('data-search') || '';
+        var matchFilter = (currentFilter === 'all' || status === currentFilter);
+        var matchSearch = (!currentSearch || search.indexOf(currentSearch) !== -1);
+        if (matchFilter && matchSearch) {
+            row.style.display = '';
+            visible++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+function exportAnalysis(name) {
+    fetch('/api/method/git_analyze.api.export_as_markdown', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Frappe-CSRF-Token': '{{ frappe.session.csrf_token or "" }}'
+        },
+        body: JSON.stringify({ analysis_name: name })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.message && data.message.error) {
+            showToast(data.message.error, 'error');
+        } else if (data.message && data.message.content) {
+            var blob = new Blob([data.message.content], { type: 'text/markdown' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = (data.message.filename || name) + '.md';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('Export downloaded!', 'success');
+        } else {
+            showToast('Export completed', 'success');
+        }
+    })
+    .catch(function() {
+        showToast('Export failed. Please try again.', 'error');
+    });
+}
+</script>
+</body>
+</html>

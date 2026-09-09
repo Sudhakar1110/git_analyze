@@ -1,31 +1,224 @@
-{% from "git_analyze/templates/pages/macros.html" import ga_sidebar, ga_scripts %}
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Git Analyzer</title></head>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard - Git Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#f1f5f9;color:#1e293b;display:flex;min-height:100vh}
+.sidebar{width:260px;background:#0f172a;color:#e2e8f0;display:flex;flex-direction:column;position:fixed;height:100vh;z-index:100}
+.sidebar-brand{padding:24px 20px;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:12px}
+.sidebar-brand svg{width:32px;height:32px;color:#10b981}
+.sidebar-brand span{font-size:18px;font-weight:700;color:#fff}
+.sidebar-nav{flex:1;padding:16px 0}
+.nav-item{display:flex;align-items:center;gap:12px;padding:12px 20px;color:#94a3b8;text-decoration:none;font-size:14px;font-weight:500;transition:all 0.2s;position:relative;border-left:3px solid transparent}
+.nav-item:hover{color:#e2e8f0;background:#1e293b}
+.nav-item.active{color:#10b981;background:rgba(16,185,129,0.08);border-left-color:#10b981}
+.nav-item.active::before{content:'';position:absolute;left:-3px;top:50%;transform:translateY(-50%);width:8px;height:8px;background:#10b981;border-radius:50%}
+.nav-item svg{width:20px;height:20px;flex-shrink:0}
+.sidebar-footer{padding:16px 20px;border-top:1px solid #1e293b;font-size:12px;color:#64748b}
+.main-content{margin-left:260px;flex:1;padding:32px;min-height:100vh}
+.page-header{margin-bottom:32px}
+.page-header h1{font-size:28px;font-weight:700;color:#0f172a;margin-bottom:4px}
+.page-header p{color:#64748b;font-size:14px}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-bottom:32px}
+.stat-card{background:#fff;border-radius:12px;padding:24px;border:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(0,0,0,0.04);display:flex;align-items:flex-start;gap:16px}
+.stat-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.stat-icon svg{width:24px;height:24px}
+.stat-icon.total{background:#eff6ff;color:#3b82f6}
+.stat-icon.completed{background:#ecfdf5;color:#10b981}
+.stat-icon.in-progress{background:#fffbeb;color:#f59e0b}
+.stat-icon.failed{background:#fef2f2;color:#ef4444}
+.stat-info h3{font-size:28px;font-weight:700;color:#0f172a;line-height:1}
+.stat-info p{font-size:13px;color:#64748b;margin-top:4px}
+.content-grid{display:grid;grid-template-columns:2fr 1fr;gap:24px}
+.card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(0,0,0,0.04);overflow:hidden}
+.card-header{padding:20px 24px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between}
+.card-header h2{font-size:16px;font-weight:600;color:#0f172a}
+.card-body{padding:0}
+.analysis-row{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid #f1f5f9;transition:background 0.15s}
+.analysis-row:last-child{border-bottom:none}
+.analysis-row:hover{background:#f8fafc}
+.analysis-info{display:flex;flex-direction:column;gap:4px}
+.analysis-name{font-size:14px;font-weight:600;color:#0f172a}
+.analysis-meta{font-size:12px;color:#64748b;display:flex;gap:12px;align-items:center}
+.status-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:500}
+.status-badge.completed{background:#ecfdf5;color:#059669}
+.status-badge.in-progress{background:#fffbeb;color:#d97706}
+.status-badge.failed{background:#fef2f2;color:#dc2626}
+.status-badge.pending{background:#f1f5f9;color:#64748b}
+.status-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
+.quick-actions{padding:24px}
+.action-card{display:flex;align-items:center;gap:16px;padding:16px;border-radius:10px;border:1px solid #e2e8f0;cursor:pointer;transition:all 0.2s;margin-bottom:12px;text-decoration:none;color:inherit}
+.action-card:last-child{margin-bottom:0}
+.action-card:hover{border-color:#10b981;box-shadow:0 2px 8px rgba(16,185,129,0.1)}
+.action-card svg{width:40px;height:40px;padding:10px;border-radius:10px;flex-shrink:0}
+.action-card svg.green{background:#ecfdf5;color:#10b981}
+.action-card svg.blue{background:#eff6ff;color:#3b82f6}
+.action-card svg.purple{background:#f5f3ff;color:#8b5cf6}
+.action-card-text h4{font-size:14px;font-weight:600;color:#0f172a}
+.action-card-text p{font-size:12px;color:#64748b;margin-top:2px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:500;border:none;cursor:pointer;transition:all 0.2s;text-decoration:none}
+.btn-primary{background:#10b981;color:#fff}
+.btn-primary:hover{background:#059669}
+.btn-secondary{background:#f1f5f9;color:#475569;border:1px solid #e2e8f0}
+.btn-secondary:hover{background:#e2e8f0}
+.btn-sm{padding:6px 14px;font-size:12px}
+.empty-state{text-align:center;padding:40px 24px;color:#94a3b8}
+.empty-state svg{width:48px;height:48px;margin-bottom:12px;opacity:0.4}
+.empty-state p{font-size:14px}
+.user-bar{position:fixed;top:0;right:0;left:260px;height:56px;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:flex-end;padding:0 32px;z-index:50}
+.user-info{display:flex;align-items:center;gap:10px;font-size:14px;color:#475569}
+.user-avatar{width:32px;height:32px;border-radius:50%;background:#10b981;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600}
+.main-content{margin-top:56px}
+</style>
+</head>
 <body>
-<div class="ga-portal">
-{{ ga_sidebar('dashboard') }}
-<main class="ga-main-content">
-<div class="ga-content-wrapper">
-<div class="ga-page-header">
-    <div><h1 class="ga-page-title">Welcome back, {{ frappe.session.full_name or 'Administrator' }}</h1><p class="ga-page-subtitle">Your repository analysis at a glance.</p></div>
-    <a href="/git-analyzer/new" class="ga-btn ga-btn-primary">+ New Analysis</a>
+<aside class="sidebar">
+<div class="sidebar-brand">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m-7-3.5l5.196-3m5.196-3L17 4.5M5 4.5l5.196 3m5.196 3L17 13.5"/></svg>
+<span>Git Analyzer</span>
 </div>
-<div class="ga-stats-grid">
-    <div class="ga-stat-card"><div class="ga-stat-icon" style="background:#dbeafe;color:#2563eb"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M3 7V17C3 18.1 3.9 19 5 19H19C20.1 19 21 18.1 21 17V7" stroke="currentColor" stroke-width="2"/></svg></div><div class="ga-stat-content"><span class="ga-stat-label">TOTAL ANALYSES</span><span class="ga-stat-value">{{ total_analyses or 0 }}</span></div></div>
-    <div class="ga-stat-card"><div class="ga-stat-icon" style="background:#d1fae5;color:#059669"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M9 12L11 14L15 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/></svg></div><div class="ga-stat-content"><span class="ga-stat-label">COMPLETED</span><span class="ga-stat-value">{{ completed_analyses or 0 }}</span></div></div>
-    <div class="ga-stat-card"><div class="ga-stat-icon" style="background:#fef3c7;color:#d97706"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M12 8V12L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><div class="ga-stat-content"><span class="ga-stat-label">IN PROGRESS</span><span class="ga-stat-value">{{ in_progress_analyses or 0 }}</span></div></div>
-    <div class="ga-stat-card"><div class="ga-stat-icon" style="background:#fce7f3;color:#db2777"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 9V13M12 17H12.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/></svg></div><div class="ga-stat-content"><span class="ga-stat-label">FAILED</span><span class="ga-stat-value">{{ failed_analyses or 0 }}</span></div></div>
+<nav class="sidebar-nav">
+<a href="/git-analyzer/dashboard" class="nav-item active">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+Dashboard
+</a>
+<a href="/git-analyzer/new-analysis" class="nav-item">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+New Analysis
+</a>
+<a href="/git-analyzer/results" class="nav-item">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+Results
+</a>
+<a href="/git-analyzer/history" class="nav-item">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+History
+</a>
+<a href="/git-analyzer/settings" class="nav-item">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+Settings
+</a>
+</nav>
+<div class="sidebar-footer">Git Analyzer v1.0</div>
+</aside>
+
+<div class="user-bar">
+<div class="user-info">
+<span>{{ frappe.session.full_name or frappe.session.user }}</span>
+<div class="user-avatar">{{ (frappe.session.full_name or frappe.session.user)[0]|upper }}</div>
 </div>
-<div class="ga-grid-2">
-    <div class="ga-card"><div class="ga-card-header"><h3 class="ga-card-title">Recent Analyses</h3><a href="/git-analyzer/results" class="ga-link">View All</a></div><div class="ga-card-body">
-        {% if recent_analyses %}{% for a in recent_analyses %}<div class="ga-list-item"><div class="ga-list-item-main"><span class="ga-list-title">{{ a.repo_name or a.name }}</span><span class="ga-list-subtitle">{{ a.github_url }}</span></div><div class="ga-list-meta"><span class="ga-badge ga-badge-{{ a.status|lower|replace(' ','-') }}">{{ a.status }}</span><span class="ga-list-date">{{ a.get_formatted('creation', '%d %b %Y') }}</span></div></div>{% endfor %}{% else %}<div class="ga-empty-state"><p>No analyses yet. Start your first analysis!</p></div>{% endif %}
-    </div></div>
-    <div class="ga-card"><div class="ga-card-header"><h3 class="ga-card-title">Quick Actions</h3></div><div class="ga-card-body">
-        <a href="/git-analyzer/new" class="ga-action-card"><div class="ga-action-icon" style="background:#dbeafe;color:#2563eb"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><div class="ga-action-content"><span class="ga-action-title">New Analysis</span><span class="ga-action-desc">Analyze a GitHub repository</span></div><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M7 4L13 10L7 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-        <a href="/git-analyzer/settings" class="ga-action-card"><div class="ga-action-icon" style="background:#d1fae5;color:#059669"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/><path d="M12 2V5M12 19V22M22 12H19M5 12H2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><div class="ga-action-content"><span class="ga-action-title">Configure Settings</span><span class="ga-action-desc">Setup API keys and preferences</span></div><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M7 4L13 10L7 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-        <a href="/git-analyzer/history" class="ga-action-card"><div class="ga-action-icon" style="background:#fef3c7;color:#d97706"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M12 6V12L16 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><div class="ga-action-content"><span class="ga-action-title">View History</span><span class="ga-action-desc">Browse past analysis requests</span></div><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M7 4L13 10L7 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-    </div></div>
 </div>
-</div></main></div>
-{{ ga_scripts() }}
-</body></html>
+
+<main class="main-content" style="margin-top:56px">
+<div class="page-header">
+<h1>Dashboard</h1>
+<p>Welcome back, {{ frappe.session.full_name or frappe.session.user }}</p>
+</div>
+
+<div class="stats-grid">
+<div class="stat-card">
+<div class="stat-icon total">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+</div>
+<div class="stat-info">
+<h3>{{ total_analyses or 0 }}</h3>
+<p>Total Analyses</p>
+</div>
+</div>
+<div class="stat-card">
+<div class="stat-icon completed">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+</div>
+<div class="stat-info">
+<h3>{{ completed_analyses or 0 }}</h3>
+<p>Completed</p>
+</div>
+</div>
+<div class="stat-card">
+<div class="stat-icon in-progress">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+</div>
+<div class="stat-info">
+<h3>{{ in_progress_analyses or 0 }}</h3>
+<p>In Progress</p>
+</div>
+</div>
+<div class="stat-card">
+<div class="stat-icon failed">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+</div>
+<div class="stat-info">
+<h3>{{ failed_analyses or 0 }}</h3>
+<p>Failed</p>
+</div>
+</div>
+</div>
+
+<div class="content-grid">
+<div class="card">
+<div class="card-header">
+<h2>Recent Analyses</h2>
+<a href="/git-analyzer/results" class="btn btn-secondary btn-sm">View All</a>
+</div>
+<div class="card-body">
+{% if recent_analyses %}
+{% for analysis in recent_analyses %}
+<div class="analysis-row">
+<div class="analysis-info">
+<span class="analysis-name">{{ analysis.repo_name }}</span>
+<span class="analysis-meta">
+<span>{{ analysis.creation }}</span>
+<span>&middot;</span>
+<span>{{ analysis.github_url }}</span>
+</span>
+</div>
+<span class="status-badge {{ analysis.status|lower|replace(' ', '-') }}">{{ analysis.status }}</span>
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-state">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+<p>No analyses yet. Start your first analysis!</p>
+</div>
+{% endif %}
+</div>
+</div>
+
+<div>
+<div class="card">
+<div class="card-header">
+<h2>Quick Actions</h2>
+</div>
+<div class="quick-actions">
+<a href="/git-analyzer/new-analysis" class="action-card">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="green"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+<div class="action-card-text">
+<h4>New Analysis</h4>
+<p>Analyze a GitHub repository</p>
+</div>
+</a>
+<a href="/git-analyzer/results" class="action-card">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="blue"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+<div class="action-card-text">
+<h4>Browse Results</h4>
+<p>View all analysis reports</p>
+</div>
+</a>
+<a href="/git-analyzer/settings" class="action-card">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="purple"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+<div class="action-card-text">
+<h4>Settings</h4>
+<p>Configure API keys &amp; preferences</p>
+</div>
+</a>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body>
+</html>

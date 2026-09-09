@@ -1,19 +1,152 @@
-{% from "git_analyze/templates/pages/macros.html" import ga_sidebar, ga_scripts %}
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>History - Git Analyzer</title></head>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>History - Git Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#f1f5f9;color:#1e293b;display:flex;min-height:100vh}
+.sidebar{width:260px;background:#0f172a;color:#e2e8f0;display:flex;flex-direction:column;position:fixed;height:100vh;z-index:100}
+.sidebar-brand{padding:24px 20px;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:12px}
+.sidebar-brand svg{width:32px;height:32px;color:#10b981}
+.sidebar-brand span{font-size:18px;font-weight:700;color:#fff}
+.sidebar-nav{flex:1;padding:16px 0}
+.nav-item{display:flex;align-items:center;gap:12px;padding:12px 20px;color:#94a3b8;text-decoration:none;font-size:14px;font-weight:500;transition:all 0.2s;position:relative;border-left:3px solid transparent}
+.nav-item:hover{color:#e2e8f0;background:#1e293b}
+.nav-item.active{color:#10b981;background:rgba(16,185,129,0.08);border-left-color:#10b981}
+.nav-item.active::before{content:'';position:absolute;left:-3px;top:50%;transform:translateY(-50%);width:8px;height:8px;background:#10b981;border-radius:50%}
+.nav-item svg{width:20px;height:20px;flex-shrink:0}
+.sidebar-footer{padding:16px 20px;border-top:1px solid #1e293b;font-size:12px;color:#64748b}
+.main-content{margin-left:260px;flex:1;padding:32px}
+.page-header{margin-bottom:32px}
+.page-header h1{font-size:28px;font-weight:700;color:#0f172a;margin-bottom:4px}
+.page-header p{color:#64748b;font-size:14px}
+.card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(0,0,0,0.04);overflow:hidden}
+.card-header{padding:20px 24px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between}
+.card-header h2{font-size:16px;font-weight:600;color:#0f172a}
+.table-wrapper{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+thead{background:#f8fafc}
+th{padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #e2e8f0;white-space:nowrap}
+td{padding:14px 16px;font-size:14px;color:#1e293b;border-bottom:1px solid #f1f5f9;white-space:nowrap}
+tr:hover{background:#f8fafc}
+.status-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:500}
+.status-badge.success{background:#ecfdf5;color:#059669}
+.status-badge.error{background:#fef2f2;color:#dc2626}
+.status-badge.pending{background:#fffbeb;color:#d97706}
+.status-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
+.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500;background:#f1f5f9;color:#475569}
+.empty-state{text-align:center;padding:60px 24px;color:#94a3b8}
+.empty-state svg{width:48px;height:48px;margin-bottom:12px;opacity:0.4}
+.empty-state p{font-size:14px}
+.user-bar{position:fixed;top:0;right:0;left:260px;height:56px;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:flex-end;padding:0 32px;z-index:50}
+.user-info{display:flex;align-items:center;gap:10px;font-size:14px;color:#475569}
+.user-avatar{width:32px;height:32px;border-radius:50%;background:#10b981;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600}
+.token-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:12px;font-weight:500;background:#f0fdf4;color:#059669}
+.response-time{font-variant-numeric:tabular-nums;font-weight:500}
+</style>
+</head>
 <body>
-<div class="ga-portal">
-{{ ga_sidebar('history') }}
-<main class="ga-main-content">
-<div class="ga-content-wrapper">
-<div class="ga-page-header"><div><h1 class="ga-page-title">Analysis History</h1><p class="ga-page-subtitle">Track all API requests and analysis operations.</p></div></div>
-<div class="ga-card"><div class="ga-card-body">
+<aside class="sidebar">
+<div class="sidebar-brand">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m-7-3.5l5.196-3m5.196-3L17 4.5M5 4.5l5.196 3m5.196 3L17 13.5"/></svg>
+<span>Git Analyzer</span>
+</div>
+<nav class="sidebar-nav">
+<a href="/git-analyzer/dashboard" class="nav-item">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+Dashboard
+</a>
+<a href="/git-analyzer/new-analysis" class="nav-item">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+New Analysis
+</a>
+<a href="/git-analyzer/results" class="nav-item">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+Results
+</a>
+<a href="/git-analyzer/history" class="nav-item active">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+History
+</a>
+<a href="/git-analyzer/settings" class="nav-item">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+Settings
+</a>
+</nav>
+<div class="sidebar-footer">Git Analyzer v1.0</div>
+</aside>
+
+<div class="user-bar">
+<div class="user-info">
+<span>{{ frappe.session.full_name or frappe.session.user }}</span>
+<div class="user-avatar">{{ (frappe.session.full_name or frappe.session.user)[0]|upper }}</div>
+</div>
+</div>
+
+<main class="main-content" style="margin-top:56px">
+<div class="page-header">
+<h1>API History</h1>
+<p>Track all API requests and their performance</p>
+</div>
+
+<div class="card">
+<div class="card-header">
+<h2>Request Log ({{ history|length }} entries)</h2>
+</div>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr>
+<th>Analysis</th>
+<th>Request Type</th>
+<th>Status</th>
+<th>Tokens</th>
+<th>Response Time</th>
+<th>Timestamp</th>
+</tr>
+</thead>
+<tbody>
 {% if history %}
-<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left;padding:12px 16px;font-size:12px;font-weight:600;color:var(--ga-text-light);text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--ga-border)">ID</th><th style="text-align:left;padding:12px 16px;font-size:12px;font-weight:600;color:var(--ga-text-light);text-transform:uppercase;border-bottom:2px solid var(--ga-border)">Analysis</th><th style="text-align:left;padding:12px 16px;font-size:12px;font-weight:600;color:var(--ga-text-light);text-transform:uppercase;border-bottom:2px solid var(--ga-border)">Type</th><th style="text-align:left;padding:12px 16px;font-size:12px;font-weight:600;color:var(--ga-text-light);text-transform:uppercase;border-bottom:2px solid var(--ga-border)">Status</th><th style="text-align:left;padding:12px 16px;font-size:12px;font-weight:600;color:var(--ga-text-light);text-transform:uppercase;border-bottom:2px solid var(--ga-border)">Tokens</th><th style="text-align:left;padding:12px 16px;font-size:12px;font-weight:600;color:var(--ga-text-light);text-transform:uppercase;border-bottom:2px solid var(--ga-border)">Time</th><th style="text-align:left;padding:12px 16px;font-size:12px;font-weight:600;color:var(--ga-text-light);text-transform:uppercase;border-bottom:2px solid var(--ga-border)">Timestamp</th></tr></thead><tbody>
-{% for h in history %}<tr><td style="padding:14px 16px;font-size:14px;border-bottom:1px solid var(--ga-border)"><code style="background:var(--ga-bg);padding:2px 6px;border-radius:4px;font-size:12px">{{ h.name }}</code></td><td style="padding:14px 16px;font-size:14px;border-bottom:1px solid var(--ga-border)">{{ h.repo_analysis }}</td><td style="padding:14px 16px;font-size:14px;border-bottom:1px solid var(--ga-border)"><span style="display:inline-flex;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:#e0e7ff;color:#3730a3">{{ h.request_type }}</span></td><td style="padding:14px 16px;font-size:14px;border-bottom:1px solid var(--ga-border)"><span class="ga-badge ga-badge-{{ h.status|lower|replace(' ','-') }}">{{ h.status }}</span></td><td style="padding:14px 16px;font-size:14px;border-bottom:1px solid var(--ga-border)">{{ h.token_usage or 0 }}</td><td style="padding:14px 16px;font-size:14px;border-bottom:1px solid var(--ga-border)">{{ "%.1f"|format(h.response_time or 0) }}s</td><td style="padding:14px 16px;font-size:14px;border-bottom:1px solid var(--ga-border)">{{ h.get_formatted('timestamp', '%d %b %Y %H:%M') }}</td></tr>{% endfor %}
-</tbody></table></div>
-{% else %}<div class="ga-empty-state"><h3>No history yet</h3><p>API request history will appear here after your first analysis.</p></div>{% endif %}
-</div></div>
-</div></main></div>
-{{ ga_scripts() }}
-</body></html>
+{% for h in history %}
+<tr>
+<td style="font-weight:500">{{ h.repo_analysis or 'N/A' }}</td>
+<td><span class="tag">{{ h.request_type or 'Unknown' }}</span></td>
+<td>
+<span class="status-badge {{ 'success' if h.status == 'Success' else ('error' if h.status == 'Failed' else 'pending') }}">
+{{ h.status or 'Pending' }}
+</span>
+</td>
+<td>
+{% if h.token_usage %}
+<span class="token-badge">{{ h.token_usage }} tokens</span>
+{% else %}
+<span style="color:#94a3b8">-</span>
+{% endif %}
+</td>
+<td>
+{% if h.response_time %}
+<span class="response-time">{{ h.response_time }}ms</span>
+{% else %}
+<span style="color:#94a3b8">-</span>
+{% endif %}
+</td>
+<td style="color:#64748b">{{ h.timestamp or h.creation }}</td>
+</tr>
+{% endfor %}
+{% endif %}
+</tbody>
+</table>
+</div>
+{% if not history %}
+<div class="empty-state">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+<p>No API history yet. Run an analysis to see request logs.</p>
+</div>
+{% endif %}
+</div>
+</main>
+</body>
+</html>
