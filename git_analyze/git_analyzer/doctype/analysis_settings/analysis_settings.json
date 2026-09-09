@@ -1,0 +1,37 @@
+{
+ "actions": [],
+ "creation": "2026-09-01 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_api",
+  "groq_api_key",
+  "groq_model",
+  "column_break_1",
+  "max_files_limit",
+  "output_language",
+  "section_break_github",
+  "github_token",
+  "enabled"
+ ],
+ "fields": [
+  {"fieldname": "section_break_api", "fieldtype": "Section Break", "label": "API Configuration"},
+  {"fieldname": "groq_api_key", "fieldtype": "Password", "label": "Groq API Key", "reqd": 1},
+  {"fieldname": "groq_model", "fieldtype": "Select", "label": "Groq Model", "options": "llama3-8b-8192\nllama3-70b-8192\nmixtral-8x7b-32768", "default": "llama3-8b-8192", "reqd": 1},
+  {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+  {"fieldname": "max_files_limit", "fieldtype": "Int", "label": "Max Files to Analyze", "default": 50, "reqd": 1},
+  {"fieldname": "output_language", "fieldtype": "Select", "label": "Output Language", "options": "English\nSpanish\nFrench\nGerman\nPortuguese\nChinese\nJapanese", "default": "English"},
+  {"fieldname": "section_break_github", "fieldtype": "Section Break", "label": "GitHub Configuration"},
+  {"fieldname": "github_token", "fieldtype": "Password", "label": "GitHub Token (optional)"},
+  {"fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "default": 1}
+ ],
+ "index_web_pages_for_search": 0,
+ "issingle": 1,
+ "modified": "2026-09-01 00:00:00.000000",
+ "module": "Git Analyzer",
+ "name": "Analysis Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "create": 1}
+ ]
+}
