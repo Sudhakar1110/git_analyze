@@ -117,6 +117,27 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans
 
 {% macro ga_scripts() %}
 <script>
+function ga_api_call(method, args) {
+    return fetch('/api/method/' + method, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-Frappe-CSRF-Token': '{{ frappe.session.csrf_token or "" }}'},
+        body: JSON.stringify(args || {})
+    }).then(function(r) { return r.json(); }).then(function(r) {
+        if (r.message !== undefined) return r.message;
+        if (r.exc) throw new Error(r.exc);
+        return r;
+    });
+}
+
+function ga_alert(msg, indicator) {
+    var d = document.createElement('div');
+    d.style.cssText = 'position:fixed;top:20px;right:20px;padding:12px 24px;border-radius:8px;color:#fff;font-size:14px;font-weight:500;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.15);transition:opacity .3s';
+    d.style.background = indicator === 'green' ? '#10b981' : '#ef4444';
+    d.textContent = msg;
+    document.body.appendChild(d);
+    setTimeout(function() { d.style.opacity = '0'; setTimeout(function() { d.remove(); }, 300); }, 3000);
+}
+
 document.querySelectorAll('.ga-filter-tab').forEach(function(tab){tab.addEventListener('click',function(){document.querySelectorAll('.ga-filter-tab').forEach(function(t){t.classList.remove('active')});this.classList.add('active');var f=this.dataset.filter;document.querySelectorAll('.ga-result-card').forEach(function(c){c.style.display=(f==='all'||c.dataset.status===f)?'block':'none'})})});
 var si=document.getElementById('search-results');if(si){si.addEventListener('input',function(){var q=this.value.toLowerCase();document.querySelectorAll('.ga-result-card').forEach(function(c){c.style.display=c.textContent.toLowerCase().includes(q)?'block':'none'})})}
 
@@ -126,14 +147,14 @@ function submitAnalysis(e){
     btn.disabled=true;btn.innerHTML='Analyzing...';
     document.getElementById('analysis-form').style.display='none';
     document.getElementById('analysis-progress').style.display='block';
-    frappe.call({method:'git_analyze.api.analyze_repo',args:{github_url:document.getElementById('github-url').value,branch:document.getElementById('branch').value||'main',depth:document.getElementById('depth').value,questions:document.getElementById('questions').value},callback:function(r){if(r.message&&r.message.name){frappe.show_alert({message:'Analysis started!',indicator:'green'});setTimeout(function(){window.location.href='/git-analyzer/results'},2000)}},error:function(r){frappe.msgprint({title:'Error',indicator:'red',message:r.message||'Failed'});document.getElementById('analysis-form').style.display='block';document.getElementById('analysis-progress').style.display='none';btn.disabled=false;btn.innerHTML='Start Analysis'}})
+    ga_api_call('git_analyze.api.analyze_repo',{github_url:document.getElementById('github-url').value,branch:document.getElementById('branch').value||'main',depth:document.getElementById('depth').value,questions:document.getElementById('questions').value}).then(function(r){ga_alert('Analysis started!','green');setTimeout(function(){window.location.href='/git-analyzer/results'},2000)}).catch(function(err){ga_alert(err.message||'Failed to start analysis','red');document.getElementById('analysis-form').style.display='block';document.getElementById('analysis-progress').style.display='none';btn.disabled=false;btn.innerHTML='Start Analysis'})
 }
 
 function saveSettings(e){
     e.preventDefault();
-    frappe.call({method:'git_analyze.api.save_settings',args:{groq_api_key:document.getElementById('groq-api-key').value,groq_model:document.getElementById('groq-model').value,max_files_limit:document.getElementById('max-files').value,output_language:document.getElementById('output-language').value,github_token:document.getElementById('github-token').value},callback:function(){frappe.show_alert({message:'Settings saved!',indicator:'green'})},error:function(r){frappe.msgprint({title:'Error',indicator:'red',message:r.message||'Failed'})}})
+    ga_api_call('git_analyze.api.save_settings',{groq_api_key:document.getElementById('groq-api-key').value,groq_model:document.getElementById('groq-model').value,max_files_limit:document.getElementById('max-files').value,output_language:document.getElementById('output-language').value,github_token:document.getElementById('github-token').value}).then(function(){ga_alert('Settings saved!','green')}).catch(function(err){ga_alert(err.message||'Failed to save settings','red')})
 }
 
-function exportAnalysis(name){frappe.call({method:'git_analyze.api.export_as_markdown',args:{analysis_name:name},callback:function(r){if(r.message){var b=new Blob([r.message],{type:'text/markdown'});var u=URL.createObjectURL(b);var a=document.createElement('a');a.href=u;a.download=name+'.md';a.click();URL.revokeObjectURL(u)}}})}
+function exportAnalysis(name){ga_api_call('git_analyze.api.export_as_markdown',{analysis_name:name}).then(function(r){if(r&&r.file_url){window.open(r.file_url,'_blank')}}).catch(function(err){ga_alert(err.message||'Export failed','red')})}
 </script>
 {% endmacro %}
