@@ -4,7 +4,11 @@ def get_context(context):
     context.no_breadcrumbs = 1
     context.no_header = 1
 
-    settings = frappe.get_single_doc("Analysis Settings")
+    try:
+        settings = frappe.get_doc("Analysis Settings", "Analysis Settings")
+    except Exception:
+        settings = None
+
     context.settings = settings
 
     if settings and settings.groq_api_key:
