@@ -53,8 +53,8 @@ def create_workspace():
     ]
     frappe.db.sql("""
         INSERT INTO `tabWorkspace`
-        (name, label, title, module, icon, category, is_hidden, public, owner, modified_by, creation, modified, links, shortcuts)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'Administrator', 'Administrator', %s, %s, %s, %s)
-    """, ('Git Analyzer', 'Git Analyzer', 'Git Analyzer', 'Git Analyzer', 'octicon octicon-mark-github', 'Modules', 0, 1, now, now, json.dumps(links), json.dumps(shortcuts)))
+        (name, label, title, module, icon, is_hidden, public, owner, modified_by, creation, modified, links, shortcuts)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, 'Administrator', 'Administrator', %s, %s, %s, %s)
+    """, ('Git Analyzer', 'Git Analyzer', 'Git Analyzer', 'Git Analyzer', 'octicon octicon-mark-github', 0, 1, now, now, json.dumps(links), json.dumps(shortcuts)))
     frappe.db.commit()
     print("Workspace created")
