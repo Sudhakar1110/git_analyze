@@ -203,11 +203,16 @@ document.getElementById('analysisForm').addEventListener('submit', function(e) {
             showToast(data.message.error, 'error');
             btn.disabled = false;
             overlay.classList.remove('active');
-        } else {
-            showToast('Analysis started successfully!', 'success');
+        } else if (data.message && data.message.status === 'success') {
+            showToast('Analysis completed!', 'success');
             setTimeout(function() {
                 window.location.href = '/git-analyzer/results';
-            }, 1500);
+            }, 1000);
+        } else {
+            showToast('Analysis started. Check results page.', 'success');
+            setTimeout(function() {
+                window.location.href = '/git-analyzer/results';
+            }, 1000);
         }
     })
     .catch(function(err) {

@@ -2,6 +2,7 @@ import frappe
 from frappe import _
 import time
 from frappe.utils import now_datetime, cint
+from git_analyze.github_fetcher import GitHubFetcher
 
 
 def has_permission(doc, user):
@@ -15,7 +16,7 @@ def run_analysis_on_submit(doc, method):
 
 
 @frappe.whitelist()
-def analyze_repo(github_url, branch="main", depth="standard", questions=""):
+def analyze_repo(github_url, branch="main", depth="medium", questions=""):
     if not github_url:
         frappe.throw(_("GitHub URL is required"))
     if "github.com" not in github_url:
@@ -25,25 +26,33 @@ def analyze_repo(github_url, branch="main", depth="standard", questions=""):
     if not settings.groq_api_key:
         frappe.throw(_("Please configure Groq API key in Analysis Settings"))
 
-    max_files = {"quick": 50, "standard": 100, "deep": 200}.get(depth, 100)
+    max_files = {"shallow": 50, "medium": 100, "deep": 200}.get(depth, 100)
+
+    fetcher_temp = GitHubFetcher()
+    owner, repo_name = fetcher_temp.parse_github_url(github_url)
 
     repo_analysis = frappe.get_doc({
         "doctype": "Repo Analysis",
         "github_url": github_url,
+        "repo_name": f"{owner}/{repo_name}",
         "branch": branch,
         "status": "In Progress",
     })
     repo_analysis.insert(ignore_permissions=True)
     frappe.db.commit()
 
-    frappe.enqueue(
-        "git_analyze.api.run_analysis",
-        repo_analysis_name=repo_analysis.name,
-        github_url=github_url,
-        branch=branch,
-        queue="long",
-        timeout=1800,
-    )
+    try:
+        run_analysis(
+            repo_analysis_name=repo_analysis.name,
+            github_url=github_url,
+            branch=branch,
+            max_files=max_files,
+        )
+    except Exception as e:
+        frappe.db.set_value("Repo Analysis", repo_analysis.name, "status", "Failed")
+        frappe.db.commit()
+        frappe.log_error(f"Analysis failed: {str(e)}")
+        return {"status": "error", "error": str(e), "repo_analysis": repo_analysis.name}
 
     return {"status": "success", "repo_analysis": repo_analysis.name, "name": repo_analysis.name}
 
@@ -68,7 +77,7 @@ def save_settings(groq_api_key=None, groq_model=None, max_files_limit=None, outp
     return {"status": "success"}
 
 
-def run_analysis(repo_analysis_name, github_url, branch="main"):
+def run_analysis(repo_analysis_name, github_url, branch="main", max_files=100):
     start_time = time.time()
     settings = frappe.get_doc("Analysis Settings", "Analysis Settings")
 
@@ -80,7 +89,7 @@ def run_analysis(repo_analysis_name, github_url, branch="main"):
         repo_data = fetcher.fetch_repository(
             github_url=github_url,
             branch=branch,
-            max_files=cint(settings.max_files_limit),
+            max_files=max_files,
             skip_patterns=settings.get_skip_patterns(),
         )
 
