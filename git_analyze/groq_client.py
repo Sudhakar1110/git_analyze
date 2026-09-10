@@ -60,6 +60,7 @@ Format the output in clean Markdown with proper sections."""
             ],
             temperature=0.3,
             max_tokens=4096,
+            timeout=60,
         )
 
         content = response.choices[0].message.content

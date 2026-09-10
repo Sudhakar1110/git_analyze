@@ -42,20 +42,13 @@ def analyze_repo(github_url, branch="main", depth="medium", questions=""):
     frappe.db.commit()
 
     try:
-        frappe.enqueue(
-            "git_analyze.api.run_analysis",
-            repo_analysis_name=repo_analysis.name,
-            github_url=github_url,
-            branch=branch,
-            max_files=max_files,
-            queue="default",
-            timeout=1800,
-            now=True,
-        )
-    except Exception:
         run_analysis(repo_analysis.name, github_url, branch, max_files)
-
-    return {"status": "success", "repo_analysis": repo_analysis.name, "name": repo_analysis.name}
+        repo_analysis.reload()
+        return {
+            "status": "success",
+            "repo_analysis": repo_analysis.name,
+            "name": repo_analysis.name,
+        }
 
 
 @frappe.whitelist()

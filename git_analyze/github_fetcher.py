@@ -35,7 +35,7 @@ class GitHubFetcher:
                       max_files: int = 50) -> List[Dict]:
         url = f"{self.GITHUB_API_BASE}/repos/{owner}/{repo}/git/trees/{branch}"
         try:
-            response = self.session.get(url, params={"recursive": 1})
+            response = self.session.get(url, params={"recursive": 1}, timeout=30)
             response.raise_for_status()
             return [
                 {"path": item["path"], "size": item.get("size", 0), "type": item["type"]}
