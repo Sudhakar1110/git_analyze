@@ -219,7 +219,21 @@ Export
 <button class="modal-close" onclick="closeExportModal()">&times;</button>
 </div>
 <div class="modal-body">
-<p style="font-size:13px;color:#64748b;margin-bottom:16px;" id="exportRepoLabel">Choose export format:</p>
+<p style="font-size:13px;color:#64748b;margin-bottom:12px;" id="exportRepoLabel">Choose export format:</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
+<div>
+<label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Client Name</label>
+<input type="text" id="exportClientName" placeholder="Optional" style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;">
+</div>
+<div>
+<label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Author</label>
+<input type="text" id="exportAuthor" placeholder="Optional" style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;">
+</div>
+<div style="grid-column:span 2;">
+<label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Date Range / Period</label>
+<input type="text" id="exportDateRange" placeholder="e.g. Jan 2024 - Mar 2024" style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;">
+</div>
+</div>
 <div class="format-grid">
 <div class="format-card" data-format="markdown" onclick="selectFormat(this)">
 <div class="icon">&#128221;</div>
@@ -304,6 +318,12 @@ function openExportModal(name, repoName) {
     document.getElementById('exportRepoLabel').textContent = 'Export: ' + repoName;
     document.getElementById('exportBtn').disabled = true;
     document.querySelectorAll('.format-card').forEach(function(c) { c.classList.remove('selected'); });
+    var cn = document.getElementById('exportClientName');
+    var au = document.getElementById('exportAuthor');
+    var dr = document.getElementById('exportDateRange');
+    if (cn) cn.value = '';
+    if (au) au.value = '';
+    if (dr) dr.value = '';
     document.getElementById('exportModal').classList.add('active');
 }
 
@@ -332,13 +352,24 @@ function doExport() {
         'json': 'git_analyze.api.export_as_json',
     };
 
+    var meta = {};
+    var cn = document.getElementById('exportClientName');
+    var au = document.getElementById('exportAuthor');
+    var dr = document.getElementById('exportDateRange');
+    if (cn && cn.value.trim()) meta.client_name = cn.value.trim();
+    if (au && au.value.trim()) meta.author = au.value.trim();
+    if (dr && dr.value.trim()) meta.date_range = dr.value.trim();
+
+    var body = { repo_analysis_name: exportTarget };
+    for (var k in meta) body[k] = meta[k];
+
     fetch('/api/method/' + endpointMap[selectedFormat], {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-Frappe-CSRF-Token': CSRF_TOKEN
         },
-        body: JSON.stringify({ repo_analysis_name: exportTarget })
+        body: JSON.stringify(body)
     })
     .then(function(r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);

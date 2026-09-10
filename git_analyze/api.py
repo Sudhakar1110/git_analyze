@@ -6,6 +6,7 @@ import traceback
 import json
 import re
 import base64
+import math as _math
 from frappe.utils import now_datetime, cint
 
 try:
@@ -330,55 +331,159 @@ def _md_to_html(text):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# PROFESSIONAL HTML / PDF REPORT
+# SVG CHART HELPERS
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _build_professional_html(r):
+def _svg_complexity_gauge(score):
+    angle = score * 3.6
+    color = "#dc2626" if score < 40 else "#d97706" if score < 70 else "#10b981"
+    return f'''<svg width="180" height="110" viewBox="0 0 180 110">
+  <defs>
+    <linearGradient id="gfill" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#dc2626"/>
+      <stop offset="40%" style="stop-color:#d97706"/>
+      <stop offset="100%" style="stop-color:#10b981"/>
+    </linearGradient>
+  </defs>
+  <path d="M20 100 A70 70 0 0 1 160 100" fill="none" stroke="#e2e8f0" stroke-width="12" stroke-linecap="round"/>
+  <path d="M20 100 A70 70 0 0 1 160 100" fill="none" stroke="url(#gfill)" stroke-width="12" stroke-linecap="round"
+    stroke-dasharray="{angle * 1.22} 220"/>
+  <text x="90" y="80" text-anchor="middle" font-size="32" font-weight="800" fill="{color}">{score}</text>
+  <text x="90" y="100" text-anchor="middle" font-size="11" fill="#64748b">Complexity Score</text>
+</svg>'''
+
+
+def _svg_tech_pie(techs):
+    n = min(len(techs), 8)
+    if n == 0:
+        return ""
+    colors = ["#10b981", "#3b82f6", "#8b5cf6", "#f59e0b", "#ef4444", "#06b6d4", "#ec4899", "#84cc16"]
+    slices = []
+    start = 0
+    cx, cy, r = 90, 70, 55
+    for i in range(n):
+        pct = 1.0 / n
+        end = start + pct
+        large = 1 if pct > 0.5 else 0
+        x1 = cx + r * _math.cos(2 * _math.pi * start - _math.pi / 2)
+        y1 = cy + r * _math.sin(2 * _math.pi * start - _math.pi / 2)
+        x2 = cx + r * _math.cos(2 * _math.pi * end - _math.pi / 2)
+        y2 = cy + r * _math.sin(2 * _math.pi * end - _math.pi / 2)
+        slices.append(f'<path d="M{cx},{cy} L{x1:.1f},{y1:.1f} A{r},{r} 0 {large},1 {x2:.1f},{y2:.1f} Z" fill="{colors[i % len(colors)]}"/>')
+        start = end
+    legend = ""
+    for i in range(n):
+        ly = 10 + i * 14
+        legend += f'<rect x="160" y="{ly}" width="10" height="10" rx="2" fill="{colors[i % len(colors)]}"/>'
+        legend += f'<text x="175" y="{ly + 9}" font-size="10" fill="#475569">{techs[i][:15]}</text>'
+    w = 160 + max(len(t) for t in techs[:n]) * 6 + 20 if techs else 300
+    w = max(w, 280)
+    return f'<svg width="{w}" height="130" viewBox="0 0 {w} 130">{"".join(slices)}{legend}</svg>'
+
+
+def _parse_techs(tech_stack):
+    if not tech_stack:
+        return []
+    techs = re.findall(r'`([^`]+)`', tech_stack)
+    if not techs:
+        techs = re.findall(
+            r'\b(Python|JavaScript|TypeScript|React|Vue|Angular|Node\.?js|Django|Flask|FastAPI|Express|Next\.?js|Nuxt|'
+            r'Laravel|Rails|Spring|Go|Rust|Java|C\+\+|PHP|Ruby|HTML|CSS|SQL|PostgreSQL|MySQL|MongoDB|Redis|'
+            r'Docker|Kubernetes|AWS|GCP|Azure|Tailwind|Bootstrap|Webpack|Vite)\b',
+            tech_stack, re.I
+        )
+    return techs[:12]
+
+
+def _parse_techs_for_docx(tech_stack):
+    return _parse_techs(tech_stack)
+
+
+def _parse_dependencies(deps):
+    if not deps:
+        return []
+    lines = deps.strip().split("\n")
+    result = []
+    for line in lines:
+        line = line.strip().lstrip("- *")
+        if line:
+            name = line.split(":")[0].split("=")[0].split(">")[0].split("<")[0].strip()
+            if name:
+                result.append(name)
+    return result[:20]
+
+def _build_professional_html(r, meta=None):
+    meta = meta or {}
     sections = _collect_sections(r)
     now = str(r.analysis_date or r.creation or now_datetime())
     score = _complexity_score(r)
+    client_name = meta.get("client_name") or ""
+    author = meta.get("author") or ""
+    date_range = meta.get("date_range") or ""
 
-    nav_items = ""
-    content_sections = ""
+    techs = _parse_techs(r.tech_stack)
+    tech_badges = "".join(
+        f'<span style="display:inline-block;padding:4px 12px;background:#ecfdf5;color:#059669;border-radius:20px;font-size:11px;font-weight:600;margin:2px;">{_esc(t)}</span>'
+        for t in techs
+    )
+
+    gauge_svg = _svg_complexity_gauge(score)
+    pie_svg = _svg_tech_pie(techs)
+
     toc_items = ""
+    content_sections = ""
     for i, key in enumerate(SECTION_ORDER):
         if key not in sections:
             continue
         label = SECTION_LABELS.get(key, key)
         num = SECTION_ICONS.get(key, f"{i+1:02d}")
         anchor = f"section-{key}"
-        toc_items += f'<li><a href="#{anchor}" style="color:#475569;text-decoration:none;font-size:13px;padding:6px 0;display:block;border-bottom:1px dashed #e2e8f0;">{num}. {label}</a></li>'
+        toc_items += f'<li style="list-style:none;padding:0;"><a href="#{anchor}" style="color:#475569;text-decoration:none;font-size:13px;padding:8px 0;display:flex;justify-content:space-between;border-bottom:1px dashed #e2e8f0;"><span>{num}. {_esc(label)}</span><span style="color:#94a3b8;">&#8594;</span></a></li>'
         content_sections += f"""
         <div id="{anchor}" style="page-break-inside:avoid;margin-bottom:40px;">
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
                 <div style="width:36px;height:36px;background:#10b981;color:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;">{num}</div>
-                <h2 style="color:#0f172a;font-size:20px;font-weight:700;margin:0;">{label}</h2>
+                <h2 style="color:#0f172a;font-size:20px;font-weight:700;margin:0;">{_esc(label)}</h2>
             </div>
             <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:24px;margin-left:48px;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
                 <div style="color:#334155;font-size:13px;line-height:1.8;">{_md_to_html(sections[key])}</div>
             </div>
         </div>"""
 
-    tech_badges = ""
-    if r.tech_stack:
-        techs = re.findall(r'`([^`]+)`', r.tech_stack)
-        if not techs:
-            techs = re.findall(r'\b(Python|JavaScript|TypeScript|React|Vue|Angular|Node|Django|Flask|FastAPI|Express|Next|Nuxt|Laravel|Rails|Spring|Go|Rust|Java|C\+\+|PHP|Ruby|HTML|CSS|SQL|PostgreSQL|MySQL|MongoDB|Redis|Docker|Kubernetes|AWS|GCP|Azure|Tailwind|Bootstrap|Webpack|Vite)\b', r.tech_stack, re.I)
-        for t in techs[:12]:
-            tech_badges += f'<span style="display:inline-block;padding:4px 12px;background:#ecfdf5;color:#059669;border-radius:20px;font-size:11px;font-weight:600;margin:2px;">{t}</span>'
+    client_block = ""
+    if client_name:
+        client_block = f'<div style="margin-bottom:8px;font-size:15px;opacity:0.9;">Prepared for: <strong>{_esc(client_name)}</strong></div>'
+    author_block = ""
+    if author:
+        author_block = f'<div style="font-size:13px;opacity:0.7;">Author: {_esc(author)}</div>'
+    date_range_block = ""
+    if date_range:
+        date_range_block = f'<div style="font-size:13px;opacity:0.7;">Period: {_esc(date_range)}</div>'
+
+    charts_page = ""
+    if techs:
+        charts_page = f"""
+<div class="page page-toc" style="page-break-after:always;">
+    <h2 style="font-size:24px;font-weight:700;color:#0f172a;margin-bottom:24px;padding-bottom:12px;border-bottom:3px solid #10b981;">Analysis Overview</h2>
+    <div style="display:flex;gap:40px;align-items:flex-start;flex-wrap:wrap;margin-bottom:32px;">
+        <div style="text-align:center;">{gauge_svg}</div>
+        <div><h3 style="font-size:16px;color:#0f172a;margin-bottom:12px;">Technology Stack</h3><div>{tech_badges}</div></div>
+    </div>
+    <div style="margin-top:20px;"><h3 style="font-size:16px;color:#0f172a;margin-bottom:12px;">Tech Distribution</h3>{pie_svg}</div>
+</div>"""
 
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Repository Analysis Report — {r.repo_name}</title>
+<title>Repository Analysis Report — {_esc(r.repo_name)}</title>
 <style>
-@page {{ size: A4; margin: 0; }}
+@page {{ size: A4; margin: 20mm 15mm 25mm 15mm; }}
+@page :first {{ margin: 0; }}
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 body {{ font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; color: #1e293b; background: #f8fafc; line-height: 1.6; }}
 .cover {{ background: linear-gradient(135deg, #0f172a 0%, #1e293b 40%, #0f766e 100%); color: #fff; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 60px 80px; page-break-after: always; }}
-.cover-brand {{ display: flex; align-items: center; gap: 12px; margin-bottom: 48px; }}
+.cover-brand {{ display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }}
 .cover-brand-icon {{ width: 48px; height: 48px; background: #10b981; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; }}
 .cover-brand-text {{ font-size: 14px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.8; }}
 .cover h1 {{ font-size: 42px; font-weight: 800; line-height: 1.15; margin-bottom: 16px; }}
@@ -389,97 +494,62 @@ body {{ font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; color: #1e
 .cover-meta-label {{ font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.6; margin-bottom: 4px; }}
 .cover-meta-value {{ font-size: 22px; font-weight: 700; }}
 .cover-footer {{ border-top: 1px solid rgba(255,255,255,0.15); padding-top: 24px; display: flex; justify-content: space-between; font-size: 13px; opacity: 0.7; }}
-.page {{ padding: 48px 60px; max-width: 900px; margin: 0 auto; background: #fff; }}
+.page {{ padding: 20px 0; max-width: 900px; margin: 0 auto; background: #fff; }}
 .page-toc {{ page-break-after: always; }}
 .page-toc h2 {{ font-size: 24px; font-weight: 700; color: #0f172a; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 3px solid #10b981; }}
-.page-toc ol {{ padding-left: 24px; }}
-.page-toc li {{ list-style: none; padding: 0; }}
-.section-header {{ display: flex; align-items: center; gap: 14px; margin-bottom: 20px; page-break-after: avoid; }}
-.section-num {{ width: 40px; height: 40px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; flex-shrink: 0; }}
-.section-title {{ font-size: 22px; font-weight: 700; color: #0f172a; }}
-.section-body {{ background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 28px; margin-bottom: 36px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); margin-left: 54px; page-break-inside: avoid; }}
-.section-content {{ color: #334155; font-size: 13.5px; line-height: 1.85; }}
-.tech-badges {{ display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }}
-.score-bar {{ display: flex; align-items: center; gap: 12px; margin: 20px 0; }}
-.score-track {{ flex: 1; height: 10px; background: #e2e8f0; border-radius: 5px; overflow: hidden; }}
-.score-fill {{ height: 100%; border-radius: 5px; transition: width 0.3s; }}
 .footer-report {{ text-align: center; padding: 32px; color: #94a3b8; font-size: 11px; border-top: 1px solid #e2e8f0; margin-top: 40px; }}
 </style>
 </head>
 <body>
-
-<!-- COVER PAGE -->
 <div class="cover">
     <div class="cover-brand">
         <div class="cover-brand-icon">&#9881;</div>
         <div class="cover-brand-text">Git Analyzer &mdash; Automated Code Analysis Report</div>
     </div>
     <h1>Repository<br><span>Analysis Report</span></h1>
-    <div class="cover-repo">{r.repo_name} &mdash; {r.branch} branch</div>
+    <div class="cover-repo">{_esc(r.repo_name)} &mdash; {_esc(r.branch)} branch</div>
+    {client_block}{author_block}{date_range_block}
+    <div style="height:20px;"></div>
     <div class="cover-meta">
-        <div class="cover-meta-item">
-            <div class="cover-meta-label">Files Analyzed</div>
-            <div class="cover-meta-value">{r.file_count or 0}</div>
-        </div>
-        <div class="cover-meta-item">
-            <div class="cover-meta-label">AI Model</div>
-            <div class="cover-meta-value" style="font-size:15px;">{r.groq_model or 'default'}</div>
-        </div>
-        <div class="cover-meta-item">
-            <div class="cover-meta-label">Tokens Consumed</div>
-            <div class="cover-meta-value">{r.token_usage or 0:,}</div>
-        </div>
-        <div class="cover-meta-item">
-            <div class="cover-meta-label">Complexity Score</div>
-            <div class="cover-meta-value" style="color:#34d399;">{score}/100</div>
-        </div>
+        <div class="cover-meta-item"><div class="cover-meta-label">Files Analyzed</div><div class="cover-meta-value">{r.file_count or 0}</div></div>
+        <div class="cover-meta-item"><div class="cover-meta-label">AI Model</div><div class="cover-meta-value" style="font-size:15px;">{_esc(r.groq_model or 'default')}</div></div>
+        <div class="cover-meta-item"><div class="cover-meta-label">Tokens Consumed</div><div class="cover-meta-value">{r.token_usage or 0:,}</div></div>
+        <div class="cover-meta-item"><div class="cover-meta-label">Complexity Score</div><div class="cover-meta-value" style="color:#34d399;">{score}/100</div></div>
     </div>
     <div class="cover-footer">
-        <span>Report generated on {now}</span>
-        <span>{r.github_url}</span>
+        <span>Report generated on {_esc(now)}</span>
+        <span>{_esc(r.github_url)}</span>
     </div>
 </div>
-
-<!-- TABLE OF CONTENTS -->
+{charts_page}
 <div class="page page-toc">
     <h2>Table of Contents</h2>
-    <ol>{toc_items}</ol>
+    <ol style="padding-left:0;">{toc_items}</ol>
     <div style="margin-top:32px;padding:20px;background:#f0fdf4;border-radius:8px;border-left:4px solid #10b981;">
         <strong style="color:#065f46;">About this report</strong>
-        <p style="color:#047857;font-size:13px;margin-top:4px;">This document was automatically generated by Git Analyzer using AI-powered code analysis. It provides a comprehensive technical overview of the repository including architecture, dependencies, workflows, and deployment guidance.</p>
+        <p style="color:#047857;font-size:13px;margin-top:4px;">This document was automatically generated by Git Analyzer using AI-powered code analysis. It provides a comprehensive technical overview of the repository.</p>
     </div>
 </div>
-
-<!-- CONTENT SECTIONS -->
 <div class="page">
     {content_sections}
-
     <div class="footer-report">
         <strong>Git Analyzer</strong> &mdash; Automated Repository Analysis<br>
-        Report generated on {now} &nbsp;|&nbsp; AI Model: {r.groq_model or 'default'} &nbsp;|&nbsp; Analysis ID: {r.name}
+        Report generated on {_esc(now)} &nbsp;|&nbsp; AI Model: {_esc(r.groq_model or 'default')} &nbsp;|&nbsp; Analysis ID: {_esc(r.name)}
     </div>
 </div>
-
 </body>
 </html>"""
 
 
 def _complexity_score(r):
     score = 30
-    if r.file_count and r.file_count > 10:
-        score += 10
-    if r.file_count and r.file_count > 50:
-        score += 10
-    if r.file_count and r.file_count > 100:
-        score += 10
-    if r.token_usage and r.token_usage > 2000:
-        score += 10
-    if r.token_usage and r.token_usage > 5000:
-        score += 10
-    if r.tech_stack and len(r.tech_stack) > 200:
-        score += 10
-    if r.architecture and len(r.architecture) > 300:
-        score += 10
+    if r.file_count and r.file_count > 10: score += 10
+    if r.file_count and r.file_count > 50: score += 10
+    if r.file_count and r.file_count > 100: score += 10
+    if r.token_usage and r.token_usage > 2000: score += 10
+    if r.token_usage and r.token_usage > 5000: score += 10
+    if r.tech_stack and len(r.tech_stack) > 200: score += 10
+    if r.architecture and len(r.architecture) > 300: score += 10
     return min(score, 100)
 
 
@@ -615,11 +685,12 @@ def export_as_markdown(repo_analysis_name):
 
 
 @frappe.whitelist()
-def export_as_html(repo_analysis_name):
+def export_as_html(repo_analysis_name, client_name=None, author=None, date_range=None):
     r, err = _safe_get_analysis(repo_analysis_name)
     if err:
         return {"error": err}
-    return {"content": _build_professional_html(r), "filename": f"{r.repo_name.replace('/', '_')}_analysis.html"}
+    meta = {"client_name": client_name, "author": author, "date_range": date_range}
+    return {"content": _build_professional_html(r, meta=meta), "filename": f"{r.repo_name.replace('/', '_')}_analysis.html"}
 
 
 @frappe.whitelist()
@@ -632,19 +703,26 @@ def export_as_json(repo_analysis_name):
 
 
 @frappe.whitelist()
-def export_as_pdf(repo_analysis_name):
+def export_as_pdf(repo_analysis_name, client_name=None, author=None, date_range=None):
     r, err = _safe_get_analysis(repo_analysis_name)
     if err:
         return {"error": err}
     try:
-        html = _build_professional_html(r)
+        meta = {"client_name": client_name, "author": author, "date_range": date_range}
+        html = _build_professional_html(r, meta=meta)
         from frappe.utils.pdf import get_pdf
+        header_html = '<div style="font-size:8px;color:#94a3b8;text-align:center;width:100%;padding:5mm 15mm;">Git Analyzer Report &mdash; ' + _esc(r.repo_name) + '</div>'
+        footer_html = '<div style="font-size:8px;color:#94a3b8;text-align:center;width:100%;padding:5mm 15mm;">Page <span class="page"></span> of <span class="topage"></span> &nbsp;|&nbsp; ' + _esc(str(r.name)) + ' &nbsp;|&nbsp; Generated ' + _esc(str(r.analysis_date or r.creation or now_datetime())) + '</div>'
         pdf = get_pdf(html, options={
             "page-size": "A4",
-            "margin-top": "0mm",
-            "margin-bottom": "0mm",
-            "margin-left": "0mm",
-            "margin-right": "0mm",
+            "margin-top": "20mm",
+            "margin-bottom": "25mm",
+            "margin-left": "15mm",
+            "margin-right": "15mm",
+            "header-html": header_html,
+            "footer-html": footer_html,
+            "header-spacing": "5",
+            "footer-spacing": "5",
             "print-media-type": "",
             "enable-local-file-access": "",
         })
@@ -658,7 +736,7 @@ def export_as_pdf(repo_analysis_name):
 
 
 @frappe.whitelist()
-def export_as_docx(repo_analysis_name):
+def export_as_docx(repo_analysis_name, client_name=None, author=None, date_range=None):
     r, err = _safe_get_analysis(repo_analysis_name)
     if err:
         return {"error": err}
@@ -666,6 +744,8 @@ def export_as_docx(repo_analysis_name):
         return {"error": "python-docx is not installed. Run: bench pip install python-docx"}
     try:
         from docx import Document
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
         import io
 
         doc = Document()
@@ -673,8 +753,8 @@ def export_as_docx(repo_analysis_name):
         section = doc.sections[0]
         section.page_height = Cm(29.7)
         section.page_width = Cm(21.0)
-        section.top_margin = Cm(2.0)
-        section.bottom_margin = Cm(2.0)
+        section.top_margin = Cm(2.5)
+        section.bottom_margin = Cm(2.5)
         section.left_margin = Cm(2.5)
         section.right_margin = Cm(2.5)
 
@@ -688,11 +768,13 @@ def export_as_docx(repo_analysis_name):
             hs.font.color.rgb = RGBColor(15, 23, 42)
             hs.font.bold = True
 
-        _add_docx_cover(doc, r)
+        _add_docx_cover(doc, r, client_name, author, date_range)
         doc.add_page_break()
 
-        _add_docx_toc_page(doc, r)
+        _add_docx_toc_field(doc)
         doc.add_page_break()
+
+        _add_docx_analysis_overview(doc, r)
 
         sections = _collect_sections(r)
         for i, key in enumerate(SECTION_ORDER):
@@ -706,15 +788,20 @@ def export_as_docx(repo_analysis_name):
                 run.font.size = Pt(18)
                 run.font.color.rgb = RGBColor(15, 23, 42)
 
-            body = doc.add_paragraph()
-            body.paragraph_format.space_before = Pt(8)
             _add_styled_content(doc, sections[key])
+
+            if key == "purpose" and sections[key]:
+                _add_docx_comment(doc, "Key finding: This section contains the executive summary of the analysis.")
+            if key == "architecture" and sections[key]:
+                _add_docx_comment(doc, "Review this section for structural insights and potential improvements.")
 
             if i < len(SECTION_ORDER) - 1:
                 doc.add_page_break()
 
         doc.add_page_break()
         _add_docx_appendix(doc, r)
+
+        _enable_track_changes(doc)
 
         buf = io.BytesIO()
         doc.save(buf)
@@ -729,7 +816,7 @@ def export_as_docx(repo_analysis_name):
         return {"error": f"DOCX generation failed: {str(e)}"}
 
 
-def _add_docx_cover(doc, r):
+def _add_docx_cover(doc, r, client_name=None, author=None, date_range=None):
     for _ in range(6):
         doc.add_paragraph("")
 
@@ -757,23 +844,50 @@ def _add_docx_cover(doc, r):
 
     doc.add_paragraph("")
 
+    if client_name:
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.add_run(f"Prepared for: {client_name}")
+        run.font.size = Pt(13)
+        run.font.color.rgb = RGBColor(100, 116, 139)
+
+    if author:
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.add_run(f"Author: {author}")
+        run.font.size = Pt(11)
+        run.font.color.rgb = RGBColor(100, 116, 139)
+
+    if date_range:
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.add_run(f"Period: {date_range}")
+        run.font.size = Pt(11)
+        run.font.color.rgb = RGBColor(100, 116, 139)
+
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = p.add_run(f"Branch: {r.branch}")
     run.font.size = Pt(12)
     run.font.color.rgb = RGBColor(100, 116, 139)
 
-    for _ in range(4):
+    for _ in range(3):
         doc.add_paragraph("")
 
-    table = doc.add_table(rows=4, cols=2)
-    table.alignment = WD_TABLE_ALIGNMENT.CENTER
     meta = [
         ("Report Date", str(r.analysis_date or r.creation)),
         ("AI Model", r.groq_model or "default"),
         ("Files Analyzed", str(r.file_count or 0)),
         ("Complexity Score", f"{_complexity_score(r)}/100"),
     ]
+    if client_name:
+        meta.insert(0, ("Client", client_name))
+    if author:
+        meta.insert(1 if client_name else 0, ("Author", author))
+
+    table = doc.add_table(rows=len(meta), cols=2)
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    _style_docx_table(table, ["Attribute", "Value"])
     for i, (k, v) in enumerate(meta):
         c0 = table.rows[i].cells[0]
         c1 = table.rows[i].cells[1]
@@ -784,11 +898,13 @@ def _add_docx_cover(doc, r):
                 para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 for run in para.runs:
                     run.font.size = Pt(10)
-        c0.paragraphs[0].runs[0].font.color.rgb = RGBColor(100, 116, 139)
-        c1.paragraphs[0].runs[0].font.bold = True
+        if c0.paragraphs[0].runs:
+            c0.paragraphs[0].runs[0].font.color.rgb = RGBColor(100, 116, 139)
+        if c1.paragraphs[0].runs:
+            c1.paragraphs[0].runs[0].font.bold = True
 
 
-def _add_docx_toc_page(doc, r):
+def _add_docx_toc_field(doc):
     h = doc.add_heading("Table of Contents", level=1)
     for run in h.runs:
         run.font.size = Pt(22)
@@ -796,25 +912,198 @@ def _add_docx_toc_page(doc, r):
 
     doc.add_paragraph("")
 
-    sections = _collect_sections(r)
-    for i, key in enumerate(SECTION_ORDER):
-        if key not in sections:
-            continue
-        label = SECTION_LABELS.get(key, key)
-        num = SECTION_ICONS.get(key, f"{i+1:02d}")
-        p = doc.add_paragraph()
-        p.paragraph_format.space_after = Pt(8)
-        run = p.add_run(f"{num}.  {label}")
-        run.font.size = Pt(13)
+    p = doc.add_paragraph()
+    run = p.add_run()
+    fld_char_begin = OxmlElement("w:fldChar")
+    fld_char_begin.set(qn("w:fldCharType"), "begin")
+    run._r.append(fld_char_begin)
+
+    run2 = p.add_run()
+    instr = OxmlElement("w:instrText")
+    instr.set(qn("xml:space"), "preserve")
+    instr.text = ' TOC \\o "1-3" \\h \\z \\u '
+    run2._r.append(instr)
+
+    run3 = p.add_run()
+    fld_char_sep = OxmlElement("w:fldChar")
+    fld_char_sep.set(qn("w:fldCharType"), "separate")
+    run3._r.append(fld_char_sep)
+
+    run4 = p.add_run("[Right-click and select 'Update Field' to populate Table of Contents]")
+    run4.font.color.rgb = RGBColor(148, 163, 184)
+    run4.font.italic = True
+    run4.font.size = Pt(10)
+
+    run5 = p.add_run()
+    fld_char_end = OxmlElement("w:fldChar")
+    fld_char_end.set(qn("w:fldCharType"), "end")
+    run5._r.append(fld_char_end)
+
+    doc.add_paragraph("")
+
+    info = doc.add_paragraph()
+    info.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    run = info.add_run("Note: Open this document in Microsoft Word and press Ctrl+A then F9 to update the Table of Contents with page numbers.")
+    run.font.size = Pt(9)
+    run.font.color.rgb = RGBColor(148, 163, 184)
+    run.font.italic = True
+
+
+def _add_docx_analysis_overview(doc, r):
+    h = doc.add_heading("Analysis Overview", level=1)
+    for run in h.runs:
+        run.font.size = Pt(18)
         run.font.color.rgb = RGBColor(15, 23, 42)
 
     doc.add_paragraph("")
-    info = doc.add_paragraph()
-    info.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    run = info.add_run("This report was automatically generated by Git Analyzer. It provides a comprehensive technical analysis of the repository covering architecture, dependencies, workflows, and deployment guidance.")
-    run.font.size = Pt(10)
-    run.font.color.rgb = RGBColor(100, 116, 139)
-    run.font.italic = True
+
+    techs = _parse_techs_for_docx(r.tech_stack)
+    if techs:
+        p = doc.add_paragraph()
+        run = p.add_run("Technology Stack")
+        run.font.size = Pt(13)
+        run.font.bold = True
+        run.font.color.rgb = RGBColor(15, 23, 42)
+
+        table = doc.add_table(rows=1, cols=3)
+        _style_docx_table(table, ["#", "Technology", "Category"])
+        categories = {
+            "python": "Language", "javascript": "Language", "typescript": "Language", "go": "Language",
+            "rust": "Language", "java": "Language", "php": "Language", "ruby": "Language", "c++": "Language",
+            "react": "Frontend", "vue": "Frontend", "angular": "Frontend", "next": "Frontend",
+            "nuxt": "Frontend", "html": "Frontend", "css": "Frontend", "tailwind": "Frontend",
+            "bootstrap": "Frontend",
+            "django": "Backend", "flask": "Backend", "fastapi": "Backend", "express": "Backend",
+            "laravel": "Backend", "rails": "Backend", "spring": "Backend", "node": "Backend",
+            "postgres": "Database", "mysql": "Database", "mongodb": "Database", "redis": "Database", "sql": "Database",
+            "docker": "DevOps", "kubernetes": "DevOps", "aws": "Cloud", "gcp": "Cloud", "azure": "Cloud",
+            "webpack": "Build", "vite": "Build",
+        }
+        for i, t in enumerate(techs[:10]):
+            row = table.add_row()
+            row.cells[0].text = str(i + 1)
+            row.cells[1].text = t
+            cat = categories.get(t.lower(), "Tool")
+            row.cells[2].text = cat
+            for cell in row.cells:
+                for para in cell.paragraphs:
+                    for run in para.runs:
+                        run.font.size = Pt(10)
+
+        doc.add_paragraph("")
+
+    score = _complexity_score(r)
+    p = doc.add_paragraph()
+    run = p.add_run(f"Complexity Score: {score}/100")
+    run.font.size = Pt(13)
+    run.font.bold = True
+    run.font.color.rgb = RGBColor(15, 23, 42)
+
+    deps = _parse_dependencies(r.dependencies)
+    if deps:
+        doc.add_paragraph("")
+        p = doc.add_paragraph()
+        run = p.add_run("Key Dependencies")
+        run.font.size = Pt(13)
+        run.font.bold = True
+        run.font.color.rgb = RGBColor(15, 23, 42)
+
+        dep_table = doc.add_table(rows=1, cols=2)
+        _style_docx_table(dep_table, ["#", "Dependency"])
+        for i, d in enumerate(deps[:15]):
+            row = dep_table.add_row()
+            row.cells[0].text = str(i + 1)
+            row.cells[1].text = d
+            for cell in row.cells:
+                for para in cell.paragraphs:
+                    for run in para.runs:
+                        run.font.size = Pt(10)
+
+    doc.add_page_break()
+
+
+def _style_docx_table(table, headers=None):
+    try:
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+        tbl = table._tbl
+        tbl_pr = tbl.tblPr if tbl.tblPr is not None else OxmlElement("w:tblPr")
+
+        borders = OxmlElement("w:tblBorders")
+        for border_name in ["top", "left", "bottom", "right", "insideH", "insideV"]:
+            border = OxmlElement(f"w:{border_name}")
+            border.set(qn("w:val"), "single")
+            border.set(qn("w:sz"), "4")
+            border.set(qn("w:space"), "0")
+            border.set(qn("w:color"), "CBD5E1")
+            borders.append(border)
+        tbl_pr.append(borders)
+
+        if headers and table.rows:
+            for i, cell in enumerate(table.rows[0].cells):
+                if i < len(headers):
+                    cell.text = headers[i]
+                shading = OxmlElement("w:shd")
+                shading.set(qn("w:fill"), "F1F5F9")
+                shading.set(qn("w:val"), "clear")
+                cell._tc.get_or_add_tcPr().append(shading)
+                for para in cell.paragraphs:
+                    for run in para.runs:
+                        run.font.bold = True
+                        run.font.size = Pt(10)
+                        run.font.color.rgb = RGBColor(71, 85, 105)
+    except Exception:
+        pass
+
+
+def _add_docx_comment(doc, comment_text):
+    try:
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+        comment = OxmlElement("w:comment")
+        comment.set(qn("w:id"), "0")
+        comment.set(qn("w:author"), "Git Analyzer")
+        comment.set(qn("w:date"), str(now_datetime()))
+        p = OxmlElement("w:p")
+        r = OxmlElement("w:r")
+        t = OxmlElement("w:t")
+        t.text = comment_text
+        r.append(t)
+        p.append(r)
+        comment.append(p)
+
+        if not hasattr(doc, '_comments_part'):
+            from docx.opc.constants import RELATIONSHIP_TYPE as RT
+            from docx.opc.part import Part
+            from docx.opc.packuri import PackURI
+            import lxml.etree as etree
+
+            comments_xml = etree.Element(qn("w:comments"))
+            comments_xml.append(comment)
+
+            part_name = PackURI("/word/comments.xml")
+            content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"
+            blob = etree.tostring(comments_xml, xml_declaration=True, encoding="UTF-8", standalone=True)
+            comments_part = Part(part_name, content_type, blob, doc.part.package)
+            doc.part.relate_to(comments_part, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments")
+            doc._comments_part = comments_part
+        else:
+            import lxml.etree as etree
+            comments_element = doc._comments_part._element
+            comments_element.append(comment)
+    except Exception:
+        pass
+
+
+def _enable_track_changes(doc):
+    try:
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+        settings = doc.settings.element
+        track = OxmlElement("w:trackRevisions")
+        settings.append(track)
+    except Exception:
+        pass
 
 
 def _add_docx_appendix(doc, r):
