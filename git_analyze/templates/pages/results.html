@@ -340,55 +340,84 @@ function doExport() {
         },
         body: JSON.stringify({ repo_analysis_name: exportTarget })
     })
-    .then(function(r) { return r.json(); })
+    .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+    })
     .then(function(data) {
         var msg = data.message || data;
         if (msg.error) {
             showToast(msg.error, 'error');
+            closeExportModal();
         } else if (msg.content) {
+            closeExportModal();
             if (msg.is_base64) {
                 downloadBase64(msg.content, msg.filename, selectedFormat);
             } else {
                 downloadText(msg.content, msg.filename, selectedFormat);
             }
-            showToast('Downloaded: ' + msg.filename, 'success');
+            setTimeout(function() { showToast('Downloaded: ' + msg.filename, 'success'); }, 300);
+        } else {
+            showToast('No content in response', 'error');
+            closeExportModal();
         }
-        closeExportModal();
+        btn.disabled = false;
+        btn.textContent = 'Download';
     })
     .catch(function(err) {
         showToast('Export failed: ' + err.message, 'error');
         closeExportModal();
-    })
-    .finally(function() {
         btn.disabled = false;
         btn.textContent = 'Download';
     });
 }
 
 function downloadText(content, filename, fmt) {
-    var mimeMap = { 'markdown': 'text/markdown', 'html': 'text/html', 'json': 'application/json' };
-    var blob = new Blob([content], { type: (mimeMap[fmt] || 'text/plain') + ';charset=utf-8' });
-    triggerDownload(blob, filename);
+    try {
+        var mimeMap = { 'markdown': 'text/markdown', 'html': 'text/html', 'json': 'application/json' };
+        var mime = mimeMap[fmt] || 'text/plain';
+        var blob = new Blob([content], { type: mime + ';charset=utf-8' });
+        triggerDownload(blob, filename);
+    } catch(e) {
+        showToast('Download error: ' + e.message, 'error');
+    }
 }
 
 function downloadBase64(b64, filename, fmt) {
-    var mimeMap = { 'pdf': 'application/pdf', 'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' };
-    var raw = atob(b64);
-    var arr = new Uint8Array(raw.length);
-    for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-    var blob = new Blob([arr], { type: mimeMap[fmt] || 'application/octet-stream' });
-    triggerDownload(blob, filename);
+    try {
+        var mimeMap = { 'pdf': 'application/pdf', 'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' };
+        var mime = mimeMap[fmt] || 'application/octet-stream';
+        var binaryStr = atob(b64);
+        var len = binaryStr.length;
+        var bytes = new Uint8Array(len);
+        for (var i = 0; i < len; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+        }
+        var blob = new Blob([bytes], { type: mime });
+        triggerDownload(blob, filename);
+    } catch(e) {
+        showToast('Binary download failed, trying text fallback...', 'error');
+        try {
+            var textBlob = new Blob([atob(b64)], { type: 'text/plain' });
+            triggerDownload(textBlob, filename);
+        } catch(e2) {
+            showToast('Download failed: ' + e.message, 'error');
+        }
+    }
 }
 
 function triggerDownload(blob, filename) {
     var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(function() {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }, 200);
 }
 
 function pollInProgress() {
