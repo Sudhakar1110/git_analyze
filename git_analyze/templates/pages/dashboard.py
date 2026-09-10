@@ -5,7 +5,12 @@ def get_context(context):
     context.no_header = 1
     context.title = "Git Analyzer"
 
-    filters = {"owner": frappe.session.user}
+    user = frappe.session.user
+    if user == "Administrator":
+        filters = {}
+    else:
+        filters = {"owner": user}
+
     context.total_analyses = frappe.db.count("Repo Analysis", filters)
     context.completed_analyses = frappe.db.count("Repo Analysis", {**filters, "status": "Completed"})
     context.in_progress_analyses = frappe.db.count("Repo Analysis", {**filters, "status": "In Progress"})

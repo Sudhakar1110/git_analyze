@@ -49,6 +49,13 @@ def analyze_repo(github_url, branch="main", depth="medium", questions=""):
             "repo_analysis": repo_analysis.name,
             "name": repo_analysis.name,
         }
+    except Exception as e:
+        error_msg = str(e)
+        frappe.db.set_value("Repo Analysis", repo_analysis.name, "status", "Failed")
+        frappe.db.set_value("Repo Analysis", repo_analysis.name, "full_output", f"Error: {error_msg}")
+        frappe.db.commit()
+        frappe.log_error(f"Analysis failed for {repo_analysis.name}: {error_msg}")
+        return {"status": "error", "error": error_msg, "repo_analysis": repo_analysis.name}
 
 
 @frappe.whitelist()
