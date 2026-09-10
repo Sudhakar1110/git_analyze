@@ -1,6 +1,8 @@
 import frappe
 from frappe import _
 import time
+import threading
+import traceback
 from frappe.utils import now_datetime, cint
 
 
@@ -41,21 +43,100 @@ def analyze_repo(github_url, branch="main", depth="medium", questions=""):
     repo_analysis.insert(ignore_permissions=True)
     frappe.db.commit()
 
+    site = frappe.local.site
+
+    t = threading.Thread(
+        target=_bg_run,
+        args=(site, repo_analysis.name, github_url, branch, max_files),
+        daemon=True,
+    )
+    t.start()
+
+    return {"status": "success", "repo_analysis": repo_analysis.name, "name": repo_analysis.name}
+
+
+def _bg_run(site, name, url, branch, max_files):
     try:
-        run_analysis(repo_analysis.name, github_url, branch, max_files)
-        repo_analysis.reload()
-        return {
-            "status": "success",
-            "repo_analysis": repo_analysis.name,
-            "name": repo_analysis.name,
-        }
+        frappe.init(site=site)
+        frappe.connect()
+        frappe.set_user("Administrator")
+        _do_analysis(name, url, branch, max_files)
     except Exception as e:
-        error_msg = str(e)
-        frappe.db.set_value("Repo Analysis", repo_analysis.name, "status", "Failed")
-        frappe.db.set_value("Repo Analysis", repo_analysis.name, "full_output", f"Error: {error_msg}")
+        try:
+            frappe.db.set_value("Repo Analysis", name, "status", "Failed")
+            frappe.db.set_value("Repo Analysis", name, "full_output", "Error: " + str(e))
+            frappe.db.commit()
+            frappe.log_error("Background analysis failed: " + str(e) + "\n" + traceback.format_exc())
+        except Exception:
+            pass
+    finally:
+        try:
+            frappe.db.close()
+        except Exception:
+            pass
+        try:
+            frappe.destroy()
+        except Exception:
+            pass
+
+
+def _do_analysis(name, github_url, branch, max_files):
+    start_time = time.time()
+    settings = frappe.get_doc("Analysis Settings", "Analysis Settings")
+
+    from git_analyze.github_fetcher import GitHubFetcher
+    from git_analyze.groq_client import GroqClient
+
+    fetcher = GitHubFetcher(github_token=settings.get_github_token())
+    repo_data = fetcher.fetch_repository(
+        github_url=github_url,
+        branch=branch,
+        max_files=max_files,
+        skip_patterns=settings.get_skip_patterns(),
+    )
+
+    if not repo_data.get("files"):
+        frappe.db.set_value("Repo Analysis", name, "status", "Failed")
+        frappe.db.set_value("Repo Analysis", name, "full_output", "No files found. Check the URL and branch.")
         frappe.db.commit()
-        frappe.log_error(f"Analysis failed for {repo_analysis.name}: {error_msg}")
-        return {"status": "error", "error": error_msg, "repo_analysis": repo_analysis.name}
+        return
+
+    groq_client = GroqClient(
+        api_key=settings.get_groq_api_key(),
+        model=settings.groq_model,
+    )
+
+    result = groq_client.analyze_repository(
+        repo_name=f"{repo_data['owner']}/{repo_data['repo']}",
+        branch=repo_data["branch"],
+        file_structure=repo_data["structure"],
+        file_contents=repo_data["files"],
+        language=settings.output_language,
+    )
+
+    sections = groq_client.parse_analysis_sections(result["content"])
+    analysis_time = time.time() - start_time
+
+    ra = frappe.get_doc("Repo Analysis", name)
+    ra.status = "Completed"
+    ra.analysis_date = now_datetime()
+    ra.purpose = sections.get("purpose", "")
+    ra.tech_stack = sections.get("tech_stack", "")
+    ra.architecture = sections.get("architecture", "")
+    ra.entry_points = sections.get("entry_points", "")
+    ra.key_modules = sections.get("key_modules", "")
+    ra.data_flow = sections.get("data_flow", "")
+    ra.api_endpoints = sections.get("api_endpoints", "")
+    ra.database_models = sections.get("database_models", "")
+    ra.dependencies = sections.get("dependencies", "")
+    ra.how_to_run = sections.get("how_to_run", "")
+    ra.full_output = result["content"]
+    ra.groq_model = result["model"]
+    ra.token_usage = result["token_usage"]["total_tokens"]
+    ra.analysis_time = analysis_time
+    ra.file_count = repo_data["analyzed_files"]
+    ra.save(ignore_permissions=True)
+    frappe.db.commit()
 
 
 @frappe.whitelist()
@@ -76,62 +157,6 @@ def save_settings(groq_api_key=None, groq_model=None, max_files_limit=None, outp
     settings.save(ignore_permissions=True)
     frappe.db.commit()
     return {"status": "success"}
-
-
-def run_analysis(repo_analysis_name, github_url, branch="main", max_files=100):
-    start_time = time.time()
-    settings = frappe.get_doc("Analysis Settings", "Analysis Settings")
-
-    from git_analyze.github_fetcher import GitHubFetcher
-    from git_analyze.groq_client import GroqClient
-
-    fetcher = GitHubFetcher(github_token=settings.get_github_token())
-    repo_data = fetcher.fetch_repository(
-        github_url=github_url,
-        branch=branch,
-        max_files=max_files,
-        skip_patterns=settings.get_skip_patterns(),
-    )
-
-    if not repo_data.get("files"):
-        frappe.throw(_("No files found in repository. Check the URL and branch."))
-
-    groq_client = GroqClient(
-        api_key=settings.get_groq_api_key(),
-        model=settings.groq_model,
-    )
-
-    result = groq_client.analyze_repository(
-        repo_name=f"{repo_data['owner']}/{repo_data['repo']}",
-        branch=repo_data["branch"],
-        file_structure=repo_data["structure"],
-        file_contents=repo_data["files"],
-        language=settings.output_language,
-    )
-
-    sections = groq_client.parse_analysis_sections(result["content"])
-    analysis_time = time.time() - start_time
-
-    repo_analysis = frappe.get_doc("Repo Analysis", repo_analysis_name)
-    repo_analysis.status = "Completed"
-    repo_analysis.analysis_date = now_datetime()
-    repo_analysis.purpose = sections.get("purpose", "")
-    repo_analysis.tech_stack = sections.get("tech_stack", "")
-    repo_analysis.architecture = sections.get("architecture", "")
-    repo_analysis.entry_points = sections.get("entry_points", "")
-    repo_analysis.key_modules = sections.get("key_modules", "")
-    repo_analysis.data_flow = sections.get("data_flow", "")
-    repo_analysis.api_endpoints = sections.get("api_endpoints", "")
-    repo_analysis.database_models = sections.get("database_models", "")
-    repo_analysis.dependencies = sections.get("dependencies", "")
-    repo_analysis.how_to_run = sections.get("how_to_run", "")
-    repo_analysis.full_output = result["content"]
-    repo_analysis.groq_model = result["model"]
-    repo_analysis.token_usage = result["token_usage"]["total_tokens"]
-    repo_analysis.analysis_time = analysis_time
-    repo_analysis.file_count = repo_data["analyzed_files"]
-    repo_analysis.save(ignore_permissions=True)
-    frappe.db.commit()
 
 
 @frappe.whitelist()

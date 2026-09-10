@@ -166,6 +166,44 @@ function showToast(message, type) {
     setTimeout(function() { toast.className = 'toast'; }, 5000);
 }
 
+function pollStatus(name) {
+    var attempts = 0;
+    var interval = setInterval(function() {
+        attempts++;
+        if (attempts > 180) {
+            clearInterval(interval);
+            showToast('Taking too long. Check results page.', 'success');
+            window.location.href = '/git-analyzer/results';
+            return;
+        }
+        fetch('/api/method/git_analyze.api.get_analysis_status', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Frappe-CSRF-Token': '{{ frappe.session.csrf_token or "" }}'
+            },
+            body: JSON.stringify({ repo_analysis_name: name })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.message) {
+                var st = data.message.status;
+                if (st === 'Completed') {
+                    clearInterval(interval);
+                    showToast('Analysis completed!', 'success');
+                    window.location.href = '/git-analyzer/results';
+                } else if (st === 'Failed') {
+                    clearInterval(interval);
+                    var err = data.message.full_output || 'Analysis failed.';
+                    showToast('Failed: ' + err.substring(0, 100), 'error');
+                    setTimeout(function() { window.location.href = '/git-analyzer/results'; }, 2000);
+                }
+            }
+        })
+        .catch(function() {});
+    }, 3000);
+}
+
 document.getElementById('analysisForm').addEventListener('submit', function(e) {
     e.preventDefault();
     var btn = document.getElementById('submitBtn');
@@ -198,7 +236,7 @@ document.getElementById('analysisForm').addEventListener('submit', function(e) {
         })
     })
     .then(function(r) {
-        if (!r.ok) return r.json().then(function(d) { throw new Error((d.message || d._server_messages || 'Server error')); });
+        if (!r.ok) return r.json().then(function(d) { throw new Error((d.message || 'Server error')); });
         return r.json();
     })
     .then(function(data) {
@@ -207,20 +245,17 @@ document.getElementById('analysisForm').addEventListener('submit', function(e) {
             showToast(msg.error, 'error');
             btn.disabled = false;
             overlay.classList.remove('active');
-        } else if (msg.status === 'success' || msg.repo_analysis) {
-            showToast('Analysis completed!', 'success');
-            setTimeout(function() { window.location.href = '/git-analyzer/results'; }, 800);
+        } else if (msg.repo_analysis) {
+            showToast('Analysis started! Processing in background...', 'success');
+            pollStatus(msg.repo_analysis);
         } else {
-            showToast('Done. Check results page.', 'success');
-            setTimeout(function() { window.location.href = '/git-analyzer/results'; }, 800);
+            showToast('Done. Check results.', 'success');
+            btn.disabled = false;
+            overlay.classList.remove('active');
         }
     })
     .catch(function(err) {
-        var msg = err.message || 'Failed to start analysis.';
-        if (msg.indexOf('_server_messages') !== -1) {
-            try { msg = JSON.parse(msg)[0].message; } catch(e) {}
-        }
-        showToast(msg, 'error');
+        showToast(err.message || 'Failed to start analysis.', 'error');
         btn.disabled = false;
         overlay.classList.remove('active');
     });
