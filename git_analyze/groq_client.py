@@ -32,7 +32,7 @@ Provide the analysis in {language} language.
 Format the output in clean Markdown with proper sections."""
 
     def __init__(self, api_key: str, model: str = "llama3-8b-8192"):
-        self.client = Groq(api_key=api_key)
+        self.client = Groq(api_key=api_key, timeout=120.0)
         self.model = model
 
     def analyze_repository(self, repo_name: str, branch: str,
@@ -60,7 +60,6 @@ Format the output in clean Markdown with proper sections."""
             ],
             temperature=0.3,
             max_tokens=4096,
-            timeout=60,
         )
 
         content = response.choices[0].message.content

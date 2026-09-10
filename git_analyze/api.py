@@ -62,14 +62,15 @@ def _bg_run(site, name, url, branch, max_files):
         frappe.set_user("Administrator")
         _do_analysis(name, url, branch, max_files)
     except Exception as e:
+        error_msg = str(e)
         try:
             frappe.db.set_value("Repo Analysis", name, "status", "Failed")
-            frappe.db.set_value("Repo Analysis", name, "full_output", "Error: " + str(e))
+            frappe.db.set_value("Repo Analysis", name, "full_output", f"Error: {error_msg}")
             frappe.db.commit()
         except Exception:
             pass
         try:
-            frappe.log_error("Background analysis failed: " + str(e) + "\n" + traceback.format_exc())
+            frappe.log_error(f"Background analysis failed for {name}: {error_msg}\n{traceback.format_exc()}")
         except Exception:
             pass
     finally:
