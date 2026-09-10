@@ -1,8 +1,10 @@
 import frappe
 
+
 def get_context(context):
     context.no_breadcrumbs = 1
     context.no_header = 1
+    context.no_cache = 1
 
     try:
         settings = frappe.get_doc("Analysis Settings", "Analysis Settings")
