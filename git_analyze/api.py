@@ -8,6 +8,14 @@ import re
 import base64
 from frappe.utils import now_datetime, cint
 
+try:
+    from docx.shared import Pt, RGBColor, Cm
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.table import WD_TABLE_ALIGNMENT
+    HAS_DOCX = True
+except ImportError:
+    HAS_DOCX = False
+
 DECOMMISSIONED_MODELS = [
     "llama3-8b-8192", "llama-3.1-8b-instant", "llama3-70b-8192",
     "llama-3.3-70b-versatile", "mixtral-8x7b-32768", "gemma2-9b-it",
@@ -654,11 +662,10 @@ def export_as_docx(repo_analysis_name):
     r, err = _safe_get_analysis(repo_analysis_name)
     if err:
         return {"error": err}
+    if not HAS_DOCX:
+        return {"error": "python-docx is not installed. Run: bench pip install python-docx"}
     try:
         from docx import Document
-        from docx.shared import Pt, RGBColor, Cm
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
-        from docx.enum.table import WD_TABLE_ALIGNMENT
         import io
 
         doc = Document()
