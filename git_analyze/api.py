@@ -257,7 +257,7 @@ def test_groq_connection():
 
     try:
         api_key = settings.get_groq_api_key()
-        model = settings.groq_model or "llama3-8b-8192"
+        model = settings.groq_model or "llama-3.1-8b-instant"
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         payload = {"model": model, "messages": [{"role": "user", "content": "Say OK"}], "max_tokens": 5}

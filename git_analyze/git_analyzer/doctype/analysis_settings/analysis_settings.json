@@ -17,7 +17,7 @@
  "fields": [
   {"fieldname": "section_break_api", "fieldtype": "Section Break", "label": "API Configuration"},
   {"fieldname": "groq_api_key", "fieldtype": "Password", "label": "Groq API Key", "reqd": 1},
-  {"fieldname": "groq_model", "fieldtype": "Select", "label": "Groq Model", "options": "llama3-8b-8192\nllama3-70b-8192\nmixtral-8x7b-32768", "default": "llama3-8b-8192", "reqd": 1},
+  {"fieldname": "groq_model", "fieldtype": "Select", "label": "Groq Model", "options": "llama-3.1-8b-instant\nllama-3.3-70b-versatile\nllama3-70b-8192\nmixtral-8x7b-32768", "default": "llama-3.1-8b-instant", "reqd": 1},
   {"fieldname": "column_break_1", "fieldtype": "Column Break"},
   {"fieldname": "max_files_limit", "fieldtype": "Int", "label": "Max Files to Analyze", "default": 50, "reqd": 1},
   {"fieldname": "output_language", "fieldtype": "Select", "label": "Output Language", "options": "English\nSpanish\nFrench\nGerman\nPortuguese\nChinese\nJapanese", "default": "English"},
