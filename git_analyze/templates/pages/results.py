@@ -14,7 +14,7 @@ def get_context(context):
         "Repo Analysis",
         filters=filters,
         fields=["name", "repo_name", "github_url", "status", "creation",
-                "file_count", "groq_model", "purpose", "tech_stack"],
+                "file_count", "groq_model", "purpose", "tech_stack", "full_output"],
         order_by="creation desc",
         limit_page_length=50,
     )
