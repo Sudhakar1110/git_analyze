@@ -874,7 +874,7 @@ def _add_styled_content(doc, text):
             p.add_run(line[2:])
         else:
             clean = re.sub(r'\*\*(.+?)\*\*', r'\1', line)
-            p = para.add_paragraph()
+            p = doc.add_paragraph()
             run = p.add_run(clean)
             run.font.size = Pt(11)
             run.font.color.rgb = RGBColor(51, 65, 85)
