@@ -4,6 +4,7 @@ import time
 import threading
 import traceback
 import json
+import re
 import base64
 from frappe.utils import now_datetime, cint
 
@@ -13,6 +14,37 @@ DECOMMISSIONED_MODELS = [
 ]
 
 ANALYSIS_LOCK = threading.Lock()
+
+SECTION_LABELS = {
+    "purpose": "Executive Summary",
+    "tech_stack": "Technology Stack",
+    "architecture": "System Architecture",
+    "entry_points": "Entry Points & Boot Sequence",
+    "key_modules": "Core Modules & Components",
+    "data_flow": "Data Flow & Pipeline",
+    "api_endpoints": "API Endpoints & Contracts",
+    "database_models": "Data Models & Schema",
+    "dependencies": "Dependency Matrix",
+    "how_to_run": "Deployment & Setup Guide",
+}
+
+SECTION_ICONS = {
+    "purpose": "01",
+    "tech_stack": "02",
+    "architecture": "03",
+    "entry_points": "04",
+    "key_modules": "05",
+    "data_flow": "06",
+    "api_endpoints": "07",
+    "database_models": "08",
+    "dependencies": "09",
+    "how_to_run": "10",
+}
+
+SECTION_ORDER = [
+    "purpose", "tech_stack", "architecture", "entry_points", "key_modules",
+    "data_flow", "api_endpoints", "database_models", "dependencies", "how_to_run",
+]
 
 
 def has_permission(doc, user):
@@ -165,7 +197,6 @@ def _do_analysis(name, github_url, branch, max_files):
 @frappe.whitelist()
 def save_settings(groq_api_key=None, groq_model=None, max_files_limit=None, output_language=None, github_token=None):
     settings = frappe.get_doc("Analysis Settings", "Analysis Settings")
-
     if groq_api_key is not None:
         settings.groq_api_key = groq_api_key
     if groq_model is not None:
@@ -176,7 +207,6 @@ def save_settings(groq_api_key=None, groq_model=None, max_files_limit=None, outp
         settings.output_language = output_language
     if github_token is not None:
         settings.github_token = github_token
-
     settings.save(ignore_permissions=True)
     frappe.db.commit()
     return {"status": "success"}
@@ -186,20 +216,16 @@ def save_settings(groq_api_key=None, groq_model=None, max_files_limit=None, outp
 def ask_followup(repo_analysis_name, question):
     if not repo_analysis_name or not question:
         frappe.throw(_("Both repo_analysis_name and question are required"))
-
     settings = frappe.get_doc("Analysis Settings", "Analysis Settings")
     repo_analysis = frappe.get_doc("Repo Analysis", repo_analysis_name)
-
     from git_analyze.groq_client import GroqClient
     groq_client = GroqClient(api_key=settings.get_groq_api_key(), model=settings.groq_model)
-
     result = groq_client.ask_followup(
         repo_name=repo_analysis.repo_name,
         question=question,
         previous_analysis=repo_analysis.full_output or "",
         language=settings.output_language,
     )
-
     return {"status": "success", "answer": result["content"]}
 
 
@@ -220,190 +246,363 @@ def get_analysis_status(repo_analysis_name):
 def get_analysis_results(repo_analysis_name):
     r = frappe.get_doc("Repo Analysis", repo_analysis_name)
     return {
-        "name": r.name,
-        "github_url": r.github_url,
-        "repo_name": r.repo_name,
-        "branch": r.branch,
-        "status": r.status,
-        "purpose": r.purpose,
-        "tech_stack": r.tech_stack,
-        "architecture": r.architecture,
-        "entry_points": r.entry_points,
-        "key_modules": r.key_modules,
-        "data_flow": r.data_flow,
-        "api_endpoints": r.api_endpoints,
-        "database_models": r.database_models,
-        "dependencies": r.dependencies,
-        "how_to_run": r.how_to_run,
-        "full_output": r.full_output,
-        "groq_model": r.groq_model,
-        "token_usage": r.token_usage,
-        "analysis_time": r.analysis_time,
-        "file_count": r.file_count,
+        "name": r.name, "github_url": r.github_url, "repo_name": r.repo_name,
+        "branch": r.branch, "status": r.status, "purpose": r.purpose,
+        "tech_stack": r.tech_stack, "architecture": r.architecture,
+        "entry_points": r.entry_points, "key_modules": r.key_modules,
+        "data_flow": r.data_flow, "api_endpoints": r.api_endpoints,
+        "database_models": r.database_models, "dependencies": r.dependencies,
+        "how_to_run": r.how_to_run, "full_output": r.full_output,
+        "groq_model": r.groq_model, "token_usage": r.token_usage,
+        "analysis_time": r.analysis_time, "file_count": r.file_count,
     }
 
 
-def _get_analysis_data(repo_analysis_name):
-    r = frappe.get_doc("Repo Analysis", repo_analysis_name)
+# ──────────────────────────────────────────────────────────────────────────────
+# REPORT DATA HELPERS
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _get_analysis_data(name):
+    r = frappe.get_doc("Repo Analysis", name)
     if r.status != "Completed" or not r.full_output:
         frappe.throw(_("Analysis is not completed yet. Export is available only for completed analyses."))
     return r
 
 
-def _get_report_html(r):
-    sections_html = ""
-    section_map = [
-        ("Project Purpose", r.purpose),
-        ("Tech Stack", r.tech_stack),
-        ("Architecture", r.architecture),
-        ("Entry Points", r.entry_points),
-        ("Key Modules", r.key_modules),
-        ("Data Flow", r.data_flow),
-        ("API Endpoints", r.api_endpoints),
-        ("Database Models", r.database_models),
-        ("Dependencies", r.dependencies),
-        ("How to Run", r.how_to_run),
-    ]
-    for title, content in section_map:
-        if content:
-            escaped = frappe.utils.escape_html(content).replace("\n", "<br>")
-            sections_html += f"""
-            <div style="margin-bottom:24px;">
-                <h2 style="color:#0f172a;font-size:18px;font-weight:600;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid #10b981;">{title}</h2>
-                <div style="color:#334155;font-size:14px;line-height:1.7;">{escaped}</div>
-            </div>"""
+def _collect_sections(r):
+    data = {}
+    for key in SECTION_ORDER:
+        val = getattr(r, key, None)
+        if val and val.strip():
+            data[key] = val.strip()
+    return data
 
-    full_escaped = frappe.utils.escape_html(r.full_output or "").replace("\n", "<br>")
+
+def _esc(text):
+    return frappe.utils.escape_html(text or "")
+
+
+def _md_to_html(text):
+    if not text:
+        return ""
+    text = _esc(text)
+    lines = text.split("\n")
+    out = []
+    in_code = False
+    for line in lines:
+        if line.strip().startswith("```"):
+            in_code = not in_code
+            out.append("<br>" if in_code else "")
+            continue
+        if in_code:
+            out.append(f'<code style="background:#1e293b;color:#e2e8f0;padding:2px 6px;border-radius:3px;font-size:12px;">{line}</code><br>')
+            continue
+        if line.startswith("### "):
+            out.append(f'<h4 style="color:#0f172a;margin:16px 0 6px;font-size:14px;">{line[4:]}</h4>')
+        elif line.startswith("## "):
+            out.append(f'<h3 style="color:#0f172a;margin:20px 0 8px;font-size:15px;border-bottom:1px solid #e2e8f0;padding-bottom:4px;">{line[3:]}</h3>')
+        elif line.startswith("# "):
+            out.append(f'<h2 style="color:#0f172a;margin:24px 0 10px;font-size:17px;">{line[2:]}</h2>')
+        elif line.startswith("- ") or line.startswith("* "):
+            out.append(f'<div style="padding-left:16px;margin:2px 0;"><span style="color:#10b981;margin-right:6px;">&#9654;</span>{line[2:]}</div>')
+        elif line.startswith("| ") or line.startswith("|--"):
+            out.append(f'<div style="font-family:monospace;font-size:12px;color:#475569;padding:1px 0;">{line}</div>')
+        elif line.strip() == "":
+            out.append("<br>")
+        else:
+            bolded = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', line)
+            out.append(f'<div style="margin:2px 0;">{bolded}</div>')
+    return "\n".join(out)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PROFESSIONAL HTML / PDF REPORT
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _build_professional_html(r):
+    sections = _collect_sections(r)
+    now = str(r.analysis_date or r.creation or now_datetime())
+    score = _complexity_score(r)
+
+    nav_items = ""
+    content_sections = ""
+    toc_items = ""
+    for i, key in enumerate(SECTION_ORDER):
+        if key not in sections:
+            continue
+        label = SECTION_LABELS.get(key, key)
+        num = SECTION_ICONS.get(key, f"{i+1:02d}")
+        anchor = f"section-{key}"
+        toc_items += f'<li><a href="#{anchor}" style="color:#475569;text-decoration:none;font-size:13px;padding:6px 0;display:block;border-bottom:1px dashed #e2e8f0;">{num}. {label}</a></li>'
+        content_sections += f"""
+        <div id="{anchor}" style="page-break-inside:avoid;margin-bottom:40px;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                <div style="width:36px;height:36px;background:#10b981;color:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;">{num}</div>
+                <h2 style="color:#0f172a;font-size:20px;font-weight:700;margin:0;">{label}</h2>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:24px;margin-left:48px;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+                <div style="color:#334155;font-size:13px;line-height:1.8;">{_md_to_html(sections[key])}</div>
+            </div>
+        </div>"""
+
+    tech_badges = ""
+    if r.tech_stack:
+        techs = re.findall(r'`([^`]+)`', r.tech_stack)
+        if not techs:
+            techs = re.findall(r'\b(Python|JavaScript|TypeScript|React|Vue|Angular|Node|Django|Flask|FastAPI|Express|Next|Nuxt|Laravel|Rails|Spring|Go|Rust|Java|C\+\+|PHP|Ruby|HTML|CSS|SQL|PostgreSQL|MySQL|MongoDB|Redis|Docker|Kubernetes|AWS|GCP|Azure|Tailwind|Bootstrap|Webpack|Vite)\b', r.tech_stack, re.I)
+        for t in techs[:12]:
+            tech_badges += f'<span style="display:inline-block;padding:4px 12px;background:#ecfdf5;color:#059669;border-radius:20px;font-size:11px;font-weight:600;margin:2px;">{t}</span>'
 
     return f"""<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Repository Analysis Report — {r.repo_name}</title>
 <style>
-body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; color: #1e293b; line-height: 1.6; }}
-.header {{ background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: white; padding: 32px; border-radius: 12px; margin-bottom: 32px; }}
-.header h1 {{ margin: 0 0 8px 0; font-size: 24px; }}
-.header p {{ margin: 4px 0; opacity: 0.85; font-size: 14px; }}
-.meta-grid {{ display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 32px; }}
-.meta-card {{ background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; text-align: center; }}
-.meta-card .label {{ font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }}
-.meta-card .value {{ font-size: 20px; font-weight: 700; color: #0f172a; margin-top: 4px; }}
-.section {{ margin-bottom: 24px; }}
-.section h2 {{ color: #0f172a; font-size: 18px; font-weight: 600; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 2px solid #10b981; }}
-.section-content {{ color: #334155; font-size: 14px; line-height: 1.7; }}
-.full-output {{ background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px; margin-top: 32px; }}
-.full-output h2 {{ border-bottom-color: #6366f1; }}
-.footer {{ text-align: center; color: #94a3b8; font-size: 12px; margin-top: 40px; padding-top: 16px; border-top: 1px solid #e2e8f0; }}
+@page {{ size: A4; margin: 0; }}
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{ font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; color: #1e293b; background: #f8fafc; line-height: 1.6; }}
+.cover {{ background: linear-gradient(135deg, #0f172a 0%, #1e293b 40%, #0f766e 100%); color: #fff; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 60px 80px; page-break-after: always; }}
+.cover-brand {{ display: flex; align-items: center; gap: 12px; margin-bottom: 48px; }}
+.cover-brand-icon {{ width: 48px; height: 48px; background: #10b981; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; }}
+.cover-brand-text {{ font-size: 14px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.8; }}
+.cover h1 {{ font-size: 42px; font-weight: 800; line-height: 1.15; margin-bottom: 16px; }}
+.cover h1 span {{ color: #34d399; }}
+.cover-repo {{ font-size: 20px; opacity: 0.9; margin-bottom: 40px; font-weight: 300; }}
+.cover-meta {{ display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; margin-bottom: 48px; }}
+.cover-meta-item {{ background: rgba(255,255,255,0.08); border-radius: 12px; padding: 20px; border: 1px solid rgba(255,255,255,0.1); }}
+.cover-meta-label {{ font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.6; margin-bottom: 4px; }}
+.cover-meta-value {{ font-size: 22px; font-weight: 700; }}
+.cover-footer {{ border-top: 1px solid rgba(255,255,255,0.15); padding-top: 24px; display: flex; justify-content: space-between; font-size: 13px; opacity: 0.7; }}
+.page {{ padding: 48px 60px; max-width: 900px; margin: 0 auto; background: #fff; }}
+.page-toc {{ page-break-after: always; }}
+.page-toc h2 {{ font-size: 24px; font-weight: 700; color: #0f172a; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 3px solid #10b981; }}
+.page-toc ol {{ padding-left: 24px; }}
+.page-toc li {{ list-style: none; padding: 0; }}
+.section-header {{ display: flex; align-items: center; gap: 14px; margin-bottom: 20px; page-break-after: avoid; }}
+.section-num {{ width: 40px; height: 40px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; flex-shrink: 0; }}
+.section-title {{ font-size: 22px; font-weight: 700; color: #0f172a; }}
+.section-body {{ background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 28px; margin-bottom: 36px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); margin-left: 54px; page-break-inside: avoid; }}
+.section-content {{ color: #334155; font-size: 13.5px; line-height: 1.85; }}
+.tech-badges {{ display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }}
+.score-bar {{ display: flex; align-items: center; gap: 12px; margin: 20px 0; }}
+.score-track {{ flex: 1; height: 10px; background: #e2e8f0; border-radius: 5px; overflow: hidden; }}
+.score-fill {{ height: 100%; border-radius: 5px; transition: width 0.3s; }}
+.footer-report {{ text-align: center; padding: 32px; color: #94a3b8; font-size: 11px; border-top: 1px solid #e2e8f0; margin-top: 40px; }}
 </style>
 </head>
 <body>
-<div class="header">
-    <h1>Repository Analysis: {r.repo_name}</h1>
-    <p><strong>URL:</strong> {r.github_url} &nbsp;|&nbsp; <strong>Branch:</strong> {r.branch} &nbsp;|&nbsp; <strong>Status:</strong> {r.status}</p>
-    <p><strong>Generated by:</strong> Git Analyzer &nbsp;|&nbsp; <strong>Date:</strong> {r.analysis_date or r.creation}</p>
+
+<!-- COVER PAGE -->
+<div class="cover">
+    <div class="cover-brand">
+        <div class="cover-brand-icon">&#9881;</div>
+        <div class="cover-brand-text">Git Analyzer &mdash; Automated Code Analysis Report</div>
+    </div>
+    <h1>Repository<br><span>Analysis Report</span></h1>
+    <div class="cover-repo">{r.repo_name} &mdash; {r.branch} branch</div>
+    <div class="cover-meta">
+        <div class="cover-meta-item">
+            <div class="cover-meta-label">Files Analyzed</div>
+            <div class="cover-meta-value">{r.file_count or 0}</div>
+        </div>
+        <div class="cover-meta-item">
+            <div class="cover-meta-label">AI Model</div>
+            <div class="cover-meta-value" style="font-size:15px;">{r.groq_model or 'default'}</div>
+        </div>
+        <div class="cover-meta-item">
+            <div class="cover-meta-label">Tokens Consumed</div>
+            <div class="cover-meta-value">{r.token_usage or 0:,}</div>
+        </div>
+        <div class="cover-meta-item">
+            <div class="cover-meta-label">Complexity Score</div>
+            <div class="cover-meta-value" style="color:#34d399;">{score}/100</div>
+        </div>
+    </div>
+    <div class="cover-footer">
+        <span>Report generated on {now}</span>
+        <span>{r.github_url}</span>
+    </div>
 </div>
-<div class="meta-grid">
-    <div class="meta-card"><div class="label">Files Analyzed</div><div class="value">{r.file_count or 0}</div></div>
-    <div class="meta-card"><div class="label">AI Model</div><div class="value" style="font-size:14px;">{r.groq_model or 'default'}</div></div>
-    <div class="meta-card"><div class="label">Tokens Used</div><div class="value">{r.token_usage or 0}</div></div>
-    <div class="meta-card"><div class="label">Time Taken</div><div class="value">{r.analysis_time or 0}s</div></div>
+
+<!-- TABLE OF CONTENTS -->
+<div class="page page-toc">
+    <h2>Table of Contents</h2>
+    <ol>{toc_items}</ol>
+    <div style="margin-top:32px;padding:20px;background:#f0fdf4;border-radius:8px;border-left:4px solid #10b981;">
+        <strong style="color:#065f46;">About this report</strong>
+        <p style="color:#047857;font-size:13px;margin-top:4px;">This document was automatically generated by Git Analyzer using AI-powered code analysis. It provides a comprehensive technical overview of the repository including architecture, dependencies, workflows, and deployment guidance.</p>
+    </div>
 </div>
-{sections_html}
-<div class="full-output">
-    <h2>Full AI Output</h2>
-    <div class="section-content">{full_escaped}</div>
+
+<!-- CONTENT SECTIONS -->
+<div class="page">
+    {content_sections}
+
+    <div class="footer-report">
+        <strong>Git Analyzer</strong> &mdash; Automated Repository Analysis<br>
+        Report generated on {now} &nbsp;|&nbsp; AI Model: {r.groq_model or 'default'} &nbsp;|&nbsp; Analysis ID: {r.name}
+    </div>
 </div>
-<div class="footer">Generated by Git Analyzer &mdash; {now_datetime()}</div>
+
 </body>
 </html>"""
 
 
-def _get_report_markdown(r):
-    md = f"# Repository Analysis: {r.repo_name}\n\n"
-    md += f"| Field | Value |\n|-------|-------|\n"
-    md += f"| **URL** | {r.github_url} |\n"
-    md += f"| **Branch** | {r.branch} |\n"
-    md += f"| **Status** | {r.status} |\n"
-    md += f"| **Files Analyzed** | {r.file_count or 0} |\n"
-    md += f"| **AI Model** | {r.groq_model or 'default'} |\n"
-    md += f"| **Tokens Used** | {r.token_usage or 0} |\n"
-    md += f"| **Time Taken** | {r.analysis_time or 0}s |\n"
-    md += f"| **Generated** | {r.analysis_date or r.creation} |\n\n"
-    md += "---\n\n"
-    section_map = [
-        ("Project Purpose", r.purpose), ("Tech Stack", r.tech_stack),
-        ("Architecture", r.architecture), ("Entry Points", r.entry_points),
-        ("Key Modules", r.key_modules), ("Data Flow", r.data_flow),
-        ("API Endpoints", r.api_endpoints), ("Database Models", r.database_models),
-        ("Dependencies", r.dependencies), ("How to Run", r.how_to_run),
-    ]
-    for title, content in section_map:
-        if content:
-            md += f"## {title}\n\n{content}\n\n"
-    md += "---\n\n## Full AI Output\n\n```\n{r.full_output}\n```\n\n"
-    md += f"*Generated by Git Analyzer on {now_datetime()}*\n"
+def _complexity_score(r):
+    score = 30
+    if r.file_count and r.file_count > 10:
+        score += 10
+    if r.file_count and r.file_count > 50:
+        score += 10
+    if r.file_count and r.file_count > 100:
+        score += 10
+    if r.token_usage and r.token_usage > 2000:
+        score += 10
+    if r.token_usage and r.token_usage > 5000:
+        score += 10
+    if r.tech_stack and len(r.tech_stack) > 200:
+        score += 10
+    if r.architecture and len(r.architecture) > 300:
+        score += 10
+    return min(score, 100)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# MARKDOWN EXPORT
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _build_professional_markdown(r):
+    sections = _collect_sections(r)
+    score = _complexity_score(r)
+    now = str(r.analysis_date or r.creation or now_datetime())
+
+    md = f"""# {r.repo_name} — Repository Analysis Report
+
+> **Generated by** Git Analyzer &nbsp;|&nbsp; **Date:** {now} &nbsp;|&nbsp; **Report ID:** {r.name}
+
+---
+
+## Overview
+
+| Metric | Value |
+|--------|-------|
+| **Repository** | {r.repo_name} |
+| **Branch** | {r.branch} |
+| **Source** | {r.github_url} |
+| **Files Analyzed** | {r.file_count or 0} |
+| **AI Model** | {r.groq_model or 'default'} |
+| **Tokens Consumed** | {r.token_usage or 0:,} |
+| **Analysis Time** | {r.analysis_time or 0}s |
+| **Complexity Score** | {score}/100 |
+
+---
+
+## Table of Contents
+
+"""
+    for i, key in enumerate(SECTION_ORDER):
+        if key in sections:
+            md += f"{i+1}. [{SECTION_LABELS.get(key, key)}](#section-{key})\n"
+    md += "\n---\n\n"
+
+    for i, key in enumerate(SECTION_ORDER):
+        if key not in sections:
+            continue
+        label = SECTION_LABELS.get(key, key)
+        md += f"## {i+1}. {label}\n\n"
+        md += f"{sections[key]}\n\n---\n\n"
+
+    md += f"""## Appendix: Full AI Analysis Output
+
+<details>
+<summary>Click to expand full raw output</summary>
+
+```
+{r.full_output}
+```
+
+</details>
+
+---
+
+*Report generated by Git Analyzer on {now}*
+"""
     return md
 
 
-def _get_report_json(r):
+# ──────────────────────────────────────────────────────────────────────────────
+# JSON EXPORT
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _build_professional_json(r):
+    sections = _collect_sections(r)
     return {
+        "report": {
+            "id": r.name,
+            "generated_by": "Git Analyzer",
+            "generated_at": str(now_datetime()),
+            "version": "2.0",
+        },
         "repository": {
             "name": r.repo_name,
             "url": r.github_url,
             "branch": r.branch,
             "status": r.status,
-            "files_analyzed": r.file_count or 0,
         },
         "analysis": {
-            "date": str(r.analysis_date or r.creation),
-            "model": r.groq_model or "default",
-            "tokens_used": r.token_usage or 0,
+            "files_analyzed": r.file_count or 0,
+            "ai_model": r.groq_model or "default",
+            "tokens_consumed": r.token_usage or 0,
             "time_seconds": r.analysis_time or 0,
+            "complexity_score": _complexity_score(r),
+            "date": str(r.analysis_date or r.creation),
         },
-        "sections": {
-            "purpose": r.purpose or "",
-            "tech_stack": r.tech_stack or "",
-            "architecture": r.architecture or "",
-            "entry_points": r.entry_points or "",
-            "key_modules": r.key_modules or "",
-            "data_flow": r.data_flow or "",
-            "api_endpoints": r.api_endpoints or "",
-            "database_models": r.database_models or "",
-            "dependencies": r.dependencies or "",
-            "how_to_run": r.how_to_run or "",
-        },
+        "sections": {key: sections.get(key, "") for key in SECTION_ORDER},
+        "section_labels": {key: SECTION_LABELS.get(key, key) for key in SECTION_ORDER},
         "full_output": r.full_output or "",
-        "generated_by": "Git Analyzer",
-        "generated_at": str(now_datetime()),
     }
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+# WHITELISTED EXPORT ENDPOINTS
+# ──────────────────────────────────────────────────────────────────────────────
 
 @frappe.whitelist()
 def export_as_markdown(repo_analysis_name):
     r = _get_analysis_data(repo_analysis_name)
-    return {"content": _get_report_markdown(r), "filename": f"{r.repo_name.replace('/', '_')}_analysis.md"}
+    return {"content": _build_professional_markdown(r), "filename": f"{r.repo_name.replace('/', '_')}_analysis.md"}
 
 
 @frappe.whitelist()
 def export_as_html(repo_analysis_name):
     r = _get_analysis_data(repo_analysis_name)
-    return {"content": _get_report_html(r), "filename": f"{r.repo_name.replace('/', '_')}_analysis.html"}
+    return {"content": _build_professional_html(r), "filename": f"{r.repo_name.replace('/', '_')}_analysis.html"}
 
 
 @frappe.whitelist()
 def export_as_json(repo_analysis_name):
     r = _get_analysis_data(repo_analysis_name)
-    data = _get_report_json(r)
+    data = _build_professional_json(r)
     return {"content": json.dumps(data, indent=2), "filename": f"{r.repo_name.replace('/', '_')}_analysis.json"}
 
 
 @frappe.whitelist()
 def export_as_pdf(repo_analysis_name):
     r = _get_analysis_data(repo_analysis_name)
-    html = _get_report_html(r)
+    html = _build_professional_html(r)
     try:
         from frappe.utils.pdf import get_pdf
-        pdf = get_pdf(html, options={"page-size": "A4", "margin-top": "15mm", "margin-bottom": "15mm"})
+        pdf = get_pdf(html, options={
+            "page-size": "A4",
+            "margin-top": "0mm",
+            "margin-bottom": "0mm",
+            "margin-left": "0mm",
+            "margin-right": "0mm",
+            "print-media-type": "",
+            "enable-local-file-access": "",
+        })
         b64 = base64.b64encode(pdf).decode("utf-8")
         return {
             "content": b64,
@@ -411,7 +610,7 @@ def export_as_pdf(repo_analysis_name):
             "is_base64": True,
         }
     except Exception as e:
-        frappe.throw(_("PDF generation failed: {0}. Ensure wkhtmltopdf is installed.").format(str(e)))
+        frappe.throw(_("PDF generation failed: {0}").format(str(e)))
 
 
 @frappe.whitelist()
@@ -419,66 +618,61 @@ def export_as_docx(repo_analysis_name):
     r = _get_analysis_data(repo_analysis_name)
     try:
         from docx import Document
-        from docx.shared import Inches, Pt, RGBColor
+        from docx.shared import Inches, Pt, RGBColor, Cm, Emu
         from docx.enum.text import WD_ALIGN_PARAGRAPH
-        from docx.enum.table import WD_TABLE_ALIGNMENT
+        from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
+        from docx.enum.section import WD_ORIENT
+        from docx.oxml.ns import qn, nsdecls
+        from docx.oxml import parse_xml
         import io
 
         doc = Document()
 
+        section = doc.sections[0]
+        section.page_height = Cm(29.7)
+        section.page_width = Cm(21.0)
+        section.top_margin = Cm(2.0)
+        section.bottom_margin = Cm(2.0)
+        section.left_margin = Cm(2.5)
+        section.right_margin = Cm(2.5)
+
         style = doc.styles["Normal"]
         style.font.name = "Calibri"
         style.font.size = Pt(11)
+        style.paragraph_format.space_after = Pt(6)
 
-        title = doc.add_heading(f"Repository Analysis: {r.repo_name}", level=0)
-        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        for level in range(1, 4):
+            hs = doc.styles[f"Heading {level}"]
+            hs.font.color.rgb = RGBColor(15, 23, 42)
+            hs.font.bold = True
 
-        table = doc.add_table(rows=8, cols=2, style="Light Grid Accent 1")
-        table.alignment = WD_TABLE_ALIGNMENT.CENTER
-        meta = [
-            ("Repository URL", r.github_url),
-            ("Branch", r.branch),
-            ("Status", r.status),
-            ("Files Analyzed", str(r.file_count or 0)),
-            ("AI Model", r.groq_model or "default"),
-            ("Tokens Used", str(r.token_usage or 0)),
-            ("Time Taken", f"{r.analysis_time or 0}s"),
-            ("Generated", str(r.analysis_date or r.creation)),
-        ]
-        for i, (k, v) in enumerate(meta):
-            table.rows[i].cells[0].text = k
-            table.rows[i].cells[1].text = v
-            for cell in table.rows[i].cells:
-                for p in cell.paragraphs:
-                    p.style.font.size = Pt(10)
+        _add_docx_cover(doc, r)
+        doc.add_page_break()
 
-        doc.add_paragraph("")
+        _add_docx_toc_page(doc, r)
+        doc.add_page_break()
 
-        section_map = [
-            ("Project Purpose", r.purpose), ("Tech Stack", r.tech_stack),
-            ("Architecture", r.architecture), ("Entry Points", r.entry_points),
-            ("Key Modules", r.key_modules), ("Data Flow", r.data_flow),
-            ("API Endpoints", r.api_endpoints), ("Database Models", r.database_models),
-            ("Dependencies", r.dependencies), ("How to Run", r.how_to_run),
-        ]
-        for title_text, content in section_map:
-            if content:
-                doc.add_heading(title_text, level=1)
-                for para in content.split("\n"):
-                    if para.strip():
-                        doc.add_paragraph(para.strip())
+        sections = _collect_sections(r)
+        for i, key in enumerate(SECTION_ORDER):
+            if key not in sections:
+                continue
+            label = SECTION_LABELS.get(key, key)
+            num = SECTION_ICONS.get(key, f"{i+1:02d}")
 
-        doc.add_heading("Full AI Output", level=1)
-        for para in (r.full_output or "").split("\n"):
-            if para.strip():
-                doc.add_paragraph(para.strip())
+            heading = doc.add_heading(f"{num}. {label}", level=1)
+            for run in heading.runs:
+                run.font.size = Pt(18)
+                run.font.color.rgb = RGBColor(15, 23, 42)
 
-        doc.add_paragraph("")
-        footer = doc.add_paragraph(f"Generated by Git Analyzer on {now_datetime()}")
-        footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        for run in footer.runs:
-            run.font.size = Pt(9)
-            run.font.color.rgb = RGBColor(148, 163, 184)
+            body = doc.add_paragraph()
+            body.paragraph_format.space_before = Pt(8)
+            _add_styled_content(body, sections[key])
+
+            if i < len(SECTION_ORDER) - 1:
+                doc.add_page_break()
+
+        doc.add_page_break()
+        _add_docx_appendix(doc, r)
 
         buf = io.BytesIO()
         doc.save(buf)
@@ -490,10 +684,165 @@ def export_as_docx(repo_analysis_name):
             "is_base64": True,
         }
     except ImportError:
-        frappe.throw(_("python-docx library is not installed. Contact your server admin to run: bench pip install python-docx"))
+        frappe.throw(_("python-docx is not installed. Contact your server admin to run: bench pip install python-docx"))
     except Exception as e:
         frappe.throw(_("DOCX generation failed: {0}").format(str(e)))
 
+
+def _add_docx_cover(doc, r):
+    for _ in range(6):
+        doc.add_paragraph("")
+
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run("GIT ANALYZER")
+    run.font.size = Pt(12)
+    run.font.color.rgb = RGBColor(16, 185, 129)
+    run.font.bold = True
+
+    doc.add_paragraph("")
+
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run("Repository Analysis Report")
+    run.font.size = Pt(28)
+    run.font.bold = True
+    run.font.color.rgb = RGBColor(15, 23, 42)
+
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run(r.repo_name)
+    run.font.size = Pt(18)
+    run.font.color.rgb = RGBColor(100, 116, 139)
+
+    doc.add_paragraph("")
+
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run(f"Branch: {r.branch}")
+    run.font.size = Pt(12)
+    run.font.color.rgb = RGBColor(100, 116, 139)
+
+    for _ in range(4):
+        doc.add_paragraph("")
+
+    table = doc.add_table(rows=4, cols=2)
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    meta = [
+        ("Report Date", str(r.analysis_date or r.creation)),
+        ("AI Model", r.groq_model or "default"),
+        ("Files Analyzed", str(r.file_count or 0)),
+        ("Complexity Score", f"{_complexity_score(r)}/100"),
+    ]
+    for i, (k, v) in enumerate(meta):
+        c0 = table.rows[i].cells[0]
+        c1 = table.rows[i].cells[1]
+        c0.text = k
+        c1.text = v
+        for cell in [c0, c1]:
+            for para in cell.paragraphs:
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                for run in para.runs:
+                    run.font.size = Pt(10)
+        c0.paragraphs[0].runs[0].font.color.rgb = RGBColor(100, 116, 139)
+        c1.paragraphs[0].runs[0].font.bold = True
+
+
+def _add_docx_toc_page(doc, r):
+    h = doc.add_heading("Table of Contents", level=1)
+    for run in h.runs:
+        run.font.size = Pt(22)
+        run.font.color.rgb = RGBColor(15, 23, 42)
+
+    doc.add_paragraph("")
+
+    sections = _collect_sections(r)
+    for i, key in enumerate(SECTION_ORDER):
+        if key not in sections:
+            continue
+        label = SECTION_LABELS.get(key, key)
+        num = SECTION_ICONS.get(key, f"{i+1:02d}")
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(8)
+        run = p.add_run(f"{num}.  {label}")
+        run.font.size = Pt(13)
+        run.font.color.rgb = RGBColor(15, 23, 42)
+
+    doc.add_paragraph("")
+    info = doc.add_paragraph()
+    info.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    run = info.add_run("This report was automatically generated by Git Analyzer. It provides a comprehensive technical analysis of the repository covering architecture, dependencies, workflows, and deployment guidance.")
+    run.font.size = Pt(10)
+    run.font.color.rgb = RGBColor(100, 116, 139)
+    run.font.italic = True
+
+
+def _add_docx_appendix(doc, r):
+    h = doc.add_heading("Appendix: Full AI Analysis Output", level=1)
+    for run in h.runs:
+        run.font.size = Pt(18)
+        run.font.color.rgb = RGBColor(15, 23, 42)
+
+    doc.add_paragraph("")
+
+    output = r.full_output or "No output available."
+    for para_text in output.split("\n"):
+        if para_text.strip():
+            p = doc.add_paragraph(para_text.strip())
+            p.paragraph_format.space_after = Pt(2)
+            for run in p.runs:
+                run.font.size = Pt(9)
+                run.font.name = "Consolas"
+                run.font.color.rgb = RGBColor(51, 65, 85)
+
+    doc.add_paragraph("")
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run(f"Generated by Git Analyzer — {now_datetime()}")
+    run.font.size = Pt(9)
+    run.font.color.rgb = RGBColor(148, 163, 184)
+
+
+def _add_styled_content(para, text):
+    if not text:
+        return
+    lines = text.split("\n")
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("### "):
+            p = para.add_paragraph()
+            run = p.add_run(line[4:])
+            run.font.size = Pt(12)
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(15, 23, 42)
+        elif line.startswith("## "):
+            p = para.add_paragraph()
+            run = p.add_run(line[3:])
+            run.font.size = Pt(13)
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(15, 23, 42)
+        elif line.startswith("# "):
+            p = para.add_paragraph()
+            run = p.add_run(line[2:])
+            run.font.size = Pt(14)
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(15, 23, 42)
+        elif line.startswith("- ") or line.startswith("* "):
+            p = para.add_paragraph(style="List Bullet")
+            p.add_run(line[2:])
+        else:
+            clean = re.sub(r'\*\*(.+?)\*\*', r'\1', line)
+            p = para.add_paragraph()
+            run = p.add_run(clean)
+            run.font.size = Pt(11)
+            run.font.color.rgb = RGBColor(51, 65, 85)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# TEST CONNECTION
+# ──────────────────────────────────────────────────────────────────────────────
 
 @frappe.whitelist()
 def test_groq_connection():
@@ -519,8 +868,8 @@ def test_groq_connection():
         data = r.json()
         return {"status": "ok", "model": model, "response": data["choices"][0]["message"]["content"]}
     except req.exceptions.ConnectionError:
-        return {"status": "error", "error": "Cannot reach api.groq.com - server firewall or network issue. Contact your server admin to allow outbound HTTPS to api.groq.com:443"}
+        return {"status": "error", "error": "Cannot reach api.groq.com"}
     except req.exceptions.Timeout:
-        return {"status": "error", "error": "Connection timed out - api.groq.com is too slow or blocked"}
+        return {"status": "error", "error": "Connection timed out"}
     except Exception as e:
         return {"status": "error", "error": f"{type(e).__name__}: {str(e)}"}
