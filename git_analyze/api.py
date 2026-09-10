@@ -6,7 +6,6 @@ import traceback
 import json
 import re
 import base64
-import html as _html_mod
 from frappe.utils import now_datetime, cint
 
 DECOMMISSIONED_MODELS = [
@@ -280,7 +279,13 @@ def _collect_sections(r):
 
 
 def _esc(text):
-    return _html_mod.escape(text or "")
+    s = str(text or "")
+    s = s.replace("&", "&amp;")
+    s = s.replace("<", "&lt;")
+    s = s.replace(">", "&gt;")
+    s = s.replace('"', "&quot;")
+    s = s.replace("'", "&#x27;")
+    return s
 
 
 def _md_to_html(text):
@@ -582,30 +587,49 @@ def _save_as_file(file_data, filename, folder="Home"):
     frappe.db.commit()
     return file_doc.file_url
 
+
+def _safe_get_analysis(name):
+    try:
+        r = frappe.get_doc("Repo Analysis", name)
+        if r.status != "Completed" or not r.full_output:
+            return None, "Analysis is not completed yet. Export is available only for completed analyses."
+        return r, None
+    except Exception as e:
+        return None, f"Could not load analysis: {str(e)}"
+
+
 @frappe.whitelist()
 def export_as_markdown(repo_analysis_name):
-    r = _get_analysis_data(repo_analysis_name)
+    r, err = _safe_get_analysis(repo_analysis_name)
+    if err:
+        return {"error": err}
     return {"content": _build_professional_markdown(r), "filename": f"{r.repo_name.replace('/', '_')}_analysis.md"}
 
 
 @frappe.whitelist()
 def export_as_html(repo_analysis_name):
-    r = _get_analysis_data(repo_analysis_name)
+    r, err = _safe_get_analysis(repo_analysis_name)
+    if err:
+        return {"error": err}
     return {"content": _build_professional_html(r), "filename": f"{r.repo_name.replace('/', '_')}_analysis.html"}
 
 
 @frappe.whitelist()
 def export_as_json(repo_analysis_name):
-    r = _get_analysis_data(repo_analysis_name)
+    r, err = _safe_get_analysis(repo_analysis_name)
+    if err:
+        return {"error": err}
     data = _build_professional_json(r)
     return {"content": json.dumps(data, indent=2), "filename": f"{r.repo_name.replace('/', '_')}_analysis.json"}
 
 
 @frappe.whitelist()
 def export_as_pdf(repo_analysis_name):
-    r = _get_analysis_data(repo_analysis_name)
-    html = _build_professional_html(r)
+    r, err = _safe_get_analysis(repo_analysis_name)
+    if err:
+        return {"error": err}
     try:
+        html = _build_professional_html(r)
         from frappe.utils.pdf import get_pdf
         pdf = get_pdf(html, options={
             "page-size": "A4",
@@ -619,21 +643,22 @@ def export_as_pdf(repo_analysis_name):
         filename = f"{r.repo_name.replace('/', '_')}_analysis.pdf"
         file_url = _save_as_file(pdf, filename, "Git Analyzer Reports")
         return {"file_url": file_url, "filename": filename}
+    except ImportError:
+        return {"error": "wkhtmltopdf is not installed on the server."}
     except Exception as e:
-        frappe.throw(_("PDF generation failed: {0}").format(str(e)))
+        return {"error": f"PDF generation failed: {str(e)}"}
 
 
 @frappe.whitelist()
 def export_as_docx(repo_analysis_name):
-    r = _get_analysis_data(repo_analysis_name)
+    r, err = _safe_get_analysis(repo_analysis_name)
+    if err:
+        return {"error": err}
     try:
         from docx import Document
-        from docx.shared import Inches, Pt, RGBColor, Cm, Emu
+        from docx.shared import Pt, RGBColor, Cm
         from docx.enum.text import WD_ALIGN_PARAGRAPH
-        from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
-        from docx.enum.section import WD_ORIENT
-        from docx.oxml.ns import qn, nsdecls
-        from docx.oxml import parse_xml
+        from docx.enum.table import WD_TABLE_ALIGNMENT
         import io
 
         doc = Document()
@@ -692,9 +717,9 @@ def export_as_docx(repo_analysis_name):
         file_url = _save_as_file(buf.read(), filename, "Git Analyzer Reports")
         return {"file_url": file_url, "filename": filename}
     except ImportError:
-        frappe.throw(_("python-docx is not installed. Contact your server admin to run: bench pip install python-docx"))
+        return {"error": "python-docx is not installed. Run: bench pip install python-docx"}
     except Exception as e:
-        frappe.throw(_("DOCX generation failed: {0}").format(str(e)))
+        return {"error": f"DOCX generation failed: {str(e)}"}
 
 
 def _add_docx_cover(doc, r):
@@ -855,7 +880,10 @@ def _add_styled_content(para, text):
 @frappe.whitelist()
 def test_groq_connection():
     import requests as req
-    settings = frappe.get_doc("Analysis Settings", "Analysis Settings")
+    try:
+        settings = frappe.get_doc("Analysis Settings", "Analysis Settings")
+    except Exception:
+        return {"status": "error", "error": "Analysis Settings not found"}
     if not settings.groq_api_key:
         return {"status": "error", "error": "No Groq API key configured"}
 
