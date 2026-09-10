@@ -1,4 +1,3 @@
-import frappe
 import time
 import requests
 from typing import Dict, Optional
@@ -36,11 +35,14 @@ Format the output in clean Markdown with proper sections."""
     def __init__(self, api_key: str, model: str = "openai/gpt-oss-20b"):
         self.api_key = api_key
         self.model = model
-        self.session = requests.Session()
-        self.session.headers.update({
-            "Authorization": f"Bearer {api_key}",
+
+    def _get_session(self):
+        s = requests.Session()
+        s.headers.update({
+            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         })
+        return s
 
     def _chat_completion(self, messages, temperature=0.3, max_tokens=4096):
         url = f"{self.GROQ_API_BASE}/chat/completions"
@@ -50,9 +52,13 @@ Format the output in clean Markdown with proper sections."""
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
-        response = self.session.post(url, json=payload, timeout=120)
-        response.raise_for_status()
-        return response.json()
+        session = self._get_session()
+        try:
+            response = session.post(url, json=payload, timeout=120)
+            response.raise_for_status()
+            return response.json()
+        finally:
+            session.close()
 
     def analyze_repository(self, repo_name: str, branch: str,
                            file_structure: str, file_contents: Dict[str, str],

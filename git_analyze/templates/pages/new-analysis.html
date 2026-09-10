@@ -50,6 +50,7 @@ textarea.form-input{min-height:120px;resize:vertical}
 @keyframes spin{to{transform:rotate(360deg)}}
 .spinner-box h3{font-size:16px;font-weight:600;color:#0f172a;margin-bottom:8px}
 .spinner-box p{font-size:14px;color:#64748b}
+.spinner-box .status-text{font-size:13px;color:#94a3b8;margin-top:12px}
 .user-bar{position:fixed;top:0;right:0;left:260px;height:56px;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:flex-end;padding:0 32px;z-index:50}
 .user-info{display:flex;align-items:center;gap:10px;font-size:14px;color:#475569}
 .user-avatar{width:32px;height:32px;border-radius:50%;background:#10b981;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600}
@@ -153,12 +154,16 @@ Start Analysis
 <div class="spinner"></div>
 <h3>Analyzing Repository...</h3>
 <p>This may take a few minutes. Please don't close this page.</p>
+<div class="status-text" id="statusText">Starting analysis...</div>
 </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
+var CSRF_TOKEN = '{{ frappe.session.csrf_token or "" }}';
+var pollInterval = null;
+
 function showToast(message, type) {
     var toast = document.getElementById('toast');
     toast.textContent = message;
@@ -168,19 +173,27 @@ function showToast(message, type) {
 
 function pollStatus(name) {
     var attempts = 0;
-    var interval = setInterval(function() {
+    var maxAttempts = 300;
+    var statusEl = document.getElementById('statusText');
+
+    pollInterval = setInterval(function() {
         attempts++;
-        if (attempts > 180) {
-            clearInterval(interval);
-            showToast('Taking too long. Check results page.', 'success');
-            window.location.href = '/git-analyzer/results';
+        if (attempts > maxAttempts) {
+            clearInterval(pollInterval);
+            statusEl.textContent = 'Taking too long. Redirecting to results...';
+            setTimeout(function() { window.location.href = '/git-analyzer/results'; }, 2000);
             return;
         }
+
+        if (attempts % 10 === 0) {
+            statusEl.textContent = 'Still working... (' + (attempts * 3) + 's elapsed)';
+        }
+
         fetch('/api/method/git_analyze.api.get_analysis_status', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Frappe-CSRF-Token': '{{ frappe.session.csrf_token or "" }}'
+                'X-Frappe-CSRF-Token': CSRF_TOKEN
             },
             body: JSON.stringify({ repo_analysis_name: name })
         })
@@ -189,14 +202,18 @@ function pollStatus(name) {
             if (data.message) {
                 var st = data.message.status;
                 if (st === 'Completed') {
-                    clearInterval(interval);
+                    clearInterval(pollInterval);
+                    statusEl.textContent = 'Analysis completed!';
                     showToast('Analysis completed!', 'success');
-                    window.location.href = '/git-analyzer/results';
+                    setTimeout(function() { window.location.href = '/git-analyzer/results'; }, 1000);
                 } else if (st === 'Failed') {
-                    clearInterval(interval);
+                    clearInterval(pollInterval);
                     var err = data.message.full_output || 'Analysis failed.';
+                    statusEl.textContent = 'Failed: ' + err.substring(0, 150);
                     showToast('Failed: ' + err.substring(0, 100), 'error');
-                    setTimeout(function() { window.location.href = '/git-analyzer/results'; }, 2000);
+                    setTimeout(function() { window.location.href = '/git-analyzer/results'; }, 3000);
+                } else if (data.message.full_output) {
+                    statusEl.textContent = data.message.full_output.substring(0, 100);
                 }
             }
         })
@@ -208,6 +225,7 @@ document.getElementById('analysisForm').addEventListener('submit', function(e) {
     e.preventDefault();
     var btn = document.getElementById('submitBtn');
     var overlay = document.getElementById('spinnerOverlay');
+    var statusEl = document.getElementById('statusText');
 
     var githubUrl = document.getElementById('github_url').value.trim();
     var branch = document.getElementById('branch').value.trim() || 'main';
@@ -221,12 +239,13 @@ document.getElementById('analysisForm').addEventListener('submit', function(e) {
 
     btn.disabled = true;
     overlay.classList.add('active');
+    statusEl.textContent = 'Starting analysis...';
 
     fetch('/api/method/git_analyze.api.analyze_repo', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-Frappe-CSRF-Token': '{{ frappe.session.csrf_token or "" }}'
+            'X-Frappe-CSRF-Token': CSRF_TOKEN
         },
         body: JSON.stringify({
             github_url: githubUrl,
@@ -236,8 +255,10 @@ document.getElementById('analysisForm').addEventListener('submit', function(e) {
         })
     })
     .then(function(r) {
-        if (!r.ok) return r.json().then(function(d) { throw new Error((d.message || 'Server error')); });
-        return r.json();
+        return r.json().then(function(d) {
+            if (!r.ok) throw new Error((d.message || 'Server error'));
+            return d;
+        });
     })
     .then(function(data) {
         var msg = data.message || data;
@@ -246,6 +267,7 @@ document.getElementById('analysisForm').addEventListener('submit', function(e) {
             btn.disabled = false;
             overlay.classList.remove('active');
         } else if (msg.repo_analysis) {
+            statusEl.textContent = 'Repository fetched. Analyzing with AI...';
             showToast('Analysis started! Processing in background...', 'success');
             pollStatus(msg.repo_analysis);
         } else {

@@ -1,6 +1,7 @@
 import frappe
 import requests
 import re
+import time
 from typing import Dict, List, Optional, Tuple
 
 
@@ -42,8 +43,18 @@ class GitHubFetcher:
                 for item in response.json().get("tree", [])
                 if item["type"] == "blob"
             ]
+        except requests.exceptions.Timeout:
+            frappe.throw(f"GitHub API timed out fetching file tree for {owner}/{repo}. The repository may be too large.")
+        except requests.exceptions.HTTPError as e:
+            status = e.response.status_code if e.response else "unknown"
+            if status == 404:
+                frappe.throw(f"Repository {owner}/{repo} not found. Check the URL and branch name.")
+            elif status == 403:
+                frappe.throw(f"GitHub API rate limit exceeded. Add a GitHub token in Settings.")
+            else:
+                frappe.throw(f"GitHub API error ({status}): {str(e)}")
         except requests.exceptions.RequestException as e:
-            frappe.throw(f"Failed to fetch repository tree: {str(e)}")
+            frappe.throw(f"Failed to connect to GitHub API: {str(e)}")
 
     def should_skip_file(self, path: str) -> bool:
         skip_dirs = [
@@ -68,7 +79,7 @@ class GitHubFetcher:
                          branch: str = "main") -> Optional[str]:
         url = f"{self.GITHUB_RAW_BASE}/{owner}/{repo}/{branch}/{path}"
         try:
-            response = self.session.get(url, timeout=10)
+            response = self.session.get(url, timeout=15)
             response.raise_for_status()
             return response.text
         except requests.exceptions.RequestException:
@@ -90,7 +101,7 @@ class GitHubFetcher:
         files_to_fetch = (key_files + other_files)[:max_files]
 
         file_contents = {}
-        for f in files_to_fetch:
+        for i, f in enumerate(files_to_fetch):
             content = self.get_file_content(owner, repo, f["path"], branch)
             if content:
                 file_contents[f["path"]] = content

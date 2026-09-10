@@ -3,7 +3,15 @@ from frappe import _
 import time
 import threading
 import traceback
+import json
 from frappe.utils import now_datetime, cint
+
+DECOMMISSIONED_MODELS = [
+    "llama3-8b-8192", "llama-3.1-8b-instant", "llama3-70b-8192",
+    "llama-3.3-70b-versatile", "mixtral-8x7b-32768", "gemma2-9b-it",
+]
+
+ANALYSIS_LOCK = threading.Lock()
 
 
 def has_permission(doc, user):
@@ -43,12 +51,13 @@ def analyze_repo(github_url, branch="main", depth="medium", questions=""):
     repo_analysis.insert(ignore_permissions=True)
     frappe.db.commit()
 
-    site = frappe.local.site
+    site_name = frappe.conf.site_name or frappe.local.site
 
     t = threading.Thread(
         target=_bg_run,
-        args=(site, repo_analysis.name, github_url, branch, max_files),
+        args=(site_name, repo_analysis.name, github_url, branch, max_files),
         daemon=True,
+        name=f"analysis-{repo_analysis.name}",
     )
     t.start()
 
@@ -57,7 +66,7 @@ def analyze_repo(github_url, branch="main", depth="medium", questions=""):
 
 def _bg_run(site, name, url, branch, max_files):
     try:
-        frappe.init(site=site)
+        frappe.init(site=site, force=True)
         frappe.connect()
         frappe.set_user("Administrator")
         _do_analysis(name, url, branch, max_files)
@@ -70,7 +79,7 @@ def _bg_run(site, name, url, branch, max_files):
         except Exception:
             pass
         try:
-            frappe.log_error(f"Analysis failed for {name}: {error_msg}\n{traceback.format_exc()}")
+            frappe.log_error(f"BG Analysis failed for {name}: {error_msg}\n{traceback.format_exc()}")
         except Exception:
             pass
     finally:
@@ -88,9 +97,10 @@ def _do_analysis(name, github_url, branch, max_files):
     start_time = time.time()
     settings = frappe.get_doc("Analysis Settings", "Analysis Settings")
 
-    from git_analyze.github_fetcher import GitHubFetcher
-    from git_analyze.groq_client import GroqClient
+    frappe.db.set_value("Repo Analysis", name, "full_output", "Fetching repository files...")
+    frappe.db.commit()
 
+    from git_analyze.github_fetcher import GitHubFetcher
     fetcher = GitHubFetcher(github_token=settings.get_github_token())
     repo_data = fetcher.fetch_repository(
         github_url=github_url,
@@ -111,6 +121,10 @@ def _do_analysis(name, github_url, branch, max_files):
         frappe.db.set_value("Analysis Settings", "Analysis Settings", "groq_model", groq_model)
         frappe.db.commit()
 
+    frappe.db.set_value("Repo Analysis", name, "full_output", f"Analyzing {repo_data['analyzed_files']} files with AI...")
+    frappe.db.commit()
+
+    from git_analyze.groq_client import GroqClient
     groq_client = GroqClient(
         api_key=settings.get_groq_api_key(),
         model=groq_model,
@@ -253,8 +267,6 @@ def export_as_markdown(repo_analysis_name):
 
     return {"content": md, "filename": filename}
 
-
-DECOMMISSIONED_MODELS = ["llama3-8b-8192", "llama-3.1-8b-instant", "llama3-70b-8192", "llama-3.3-70b-versatile", "mixtral-8x7b-32768", "gemma2-9b-it"]
 
 @frappe.whitelist()
 def test_groq_connection():
