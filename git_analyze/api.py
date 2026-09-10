@@ -66,6 +66,9 @@ def _bg_run(site, name, url, branch, max_files):
             frappe.db.set_value("Repo Analysis", name, "status", "Failed")
             frappe.db.set_value("Repo Analysis", name, "full_output", "Error: " + str(e))
             frappe.db.commit()
+        except Exception:
+            pass
+        try:
             frappe.log_error("Background analysis failed: " + str(e) + "\n" + traceback.format_exc())
         except Exception:
             pass
@@ -117,25 +120,23 @@ def _do_analysis(name, github_url, branch, max_files):
     sections = groq_client.parse_analysis_sections(result["content"])
     analysis_time = time.time() - start_time
 
-    ra = frappe.get_doc("Repo Analysis", name)
-    ra.status = "Completed"
-    ra.analysis_date = now_datetime()
-    ra.purpose = sections.get("purpose", "")
-    ra.tech_stack = sections.get("tech_stack", "")
-    ra.architecture = sections.get("architecture", "")
-    ra.entry_points = sections.get("entry_points", "")
-    ra.key_modules = sections.get("key_modules", "")
-    ra.data_flow = sections.get("data_flow", "")
-    ra.api_endpoints = sections.get("api_endpoints", "")
-    ra.database_models = sections.get("database_models", "")
-    ra.dependencies = sections.get("dependencies", "")
-    ra.how_to_run = sections.get("how_to_run", "")
-    ra.full_output = result["content"]
-    ra.groq_model = result["model"]
-    ra.token_usage = result["token_usage"]["total_tokens"]
-    ra.analysis_time = analysis_time
-    ra.file_count = repo_data["analyzed_files"]
-    ra.save(ignore_permissions=True)
+    frappe.db.set_value("Repo Analysis", name, "status", "Completed")
+    frappe.db.set_value("Repo Analysis", name, "analysis_date", now_datetime())
+    frappe.db.set_value("Repo Analysis", name, "purpose", sections.get("purpose", ""))
+    frappe.db.set_value("Repo Analysis", name, "tech_stack", sections.get("tech_stack", ""))
+    frappe.db.set_value("Repo Analysis", name, "architecture", sections.get("architecture", ""))
+    frappe.db.set_value("Repo Analysis", name, "entry_points", sections.get("entry_points", ""))
+    frappe.db.set_value("Repo Analysis", name, "key_modules", sections.get("key_modules", ""))
+    frappe.db.set_value("Repo Analysis", name, "data_flow", sections.get("data_flow", ""))
+    frappe.db.set_value("Repo Analysis", name, "api_endpoints", sections.get("api_endpoints", ""))
+    frappe.db.set_value("Repo Analysis", name, "database_models", sections.get("database_models", ""))
+    frappe.db.set_value("Repo Analysis", name, "dependencies", sections.get("dependencies", ""))
+    frappe.db.set_value("Repo Analysis", name, "how_to_run", sections.get("how_to_run", ""))
+    frappe.db.set_value("Repo Analysis", name, "full_output", result["content"])
+    frappe.db.set_value("Repo Analysis", name, "groq_model", result["model"])
+    frappe.db.set_value("Repo Analysis", name, "token_usage", result["token_usage"]["total_tokens"])
+    frappe.db.set_value("Repo Analysis", name, "analysis_time", analysis_time)
+    frappe.db.set_value("Repo Analysis", name, "file_count", repo_data["analyzed_files"])
     frappe.db.commit()
 
 
