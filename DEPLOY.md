@@ -1,251 +1,510 @@
-# Git Analyzer — Deployment & User Guide
+# Git Analyzer
 
-## Overview
+## Intelligent Repository Analysis Platform
 
-Git Analyzer is a Frappe v15 custom app that performs AI-powered analysis of GitHub repositories. It uses the Groq API to analyze code structure, architecture, dependencies, and workflows, then generates professional reports in multiple formats.
+An AI-powered Frappe application that analyzes GitHub repositories, generates comprehensive technical reports, and exports them in professional formats.
+
+---
+
+## Table of Contents
+
+- [Application Overview](#application-overview)
+- [Workflow — Start to End](#workflow--start-to-end)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Export Formats](#export-formats)
+- [User Roles & Permissions](#user-roles--permissions)
+- [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
+
+---
+
+## Application Overview
+
+Git Analyzer connects to GitHub, fetches repository files, sends them to an AI model via the Groq API, and produces a structured technical analysis covering architecture, dependencies, data flow, and deployment instructions.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        GIT ANALYZER                             │
+│                  Repository Analysis Platform                   │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌─────────┐ │
+│   │  GitHub   │───▶│   Groq   │───▶│ Frappe   │───▶│ Export  │ │
+│   │  API      │    │   API    │    │ Database │    │ Engine  │ │
+│   └──────────┘    └──────────┘    └──────────┘    └─────────┘ │
+│        │               │               │               │       │
+│        ▼               ▼               ▼               ▼       │
+│   Fetch Files    AI Analysis    Store Results    PDF/DOCX/HTML │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Workflow — Start to End
+
+### Phase 1: User Initiates Analysis
+
+```
+ User Action                     System Response
+ ─────────────                   ───────────────
+ 1. User opens New Analysis  ──▶  Form loads with URL input,
+    page                          branch selector, depth picker
+
+ 2. User enters GitHub URL   ──▶  System validates URL format
+    e.g. github.com/owner/repo    (must contain github.com)
+
+ 3. User selects branch      ──▶  Default: main
+    (main, develop, etc.)
+
+ 4. User selects depth       ──▶  Shallow: 50 files
+                                  Medium:  100 files
+                                  Deep:    200 files
+
+ 5. User clicks "Start       ──▶  Request sent to server
+    Analysis"                      via fetch API with CSRF token
+```
+
+### Phase 2: System Creates Analysis Record
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 1. validate_github_url()                                    │
+│    ├── Check URL contains "github.com"                      │
+│    ├── Parse owner and repo name from URL                   │
+│    └── Throw error if invalid                               │
+│                                                             │
+│ 2. load_settings()                                          │
+│    ├── Fetch Analysis Settings singleton                    │
+│    ├── Verify Groq API key exists                           │
+│    └── Throw error if not configured                        │
+│                                                             │
+│ 3. create_record()                                          │
+│    ├── Create "Repo Analysis" document                      │
+│    ├── Set status = "In Progress"                           │
+│    ├── Set owner = current logged-in user                   │
+│    ├── Save to database                                     │
+│    └── Return analysis ID to frontend                       │
+│                                                             │
+│ 4. start_background_thread()                                │
+│    ├── Initialize Frappe context in new thread              │
+│    ├── Connect to database                                  │
+│    └── Begin analysis pipeline                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Phase 3: Frontend Polls for Status
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│   Spinner Overlay                                           │
+│   ┌─────────────────────────────┐                           │
+│   │      ⟳ Analyzing...        │                           │
+│   │                             │                           │
+│   │  "Fetching repository       │  ◀── Status text updates  │
+│   │   files..."                 │      from DB every 3s     │
+│   │                             │                           │
+│   └─────────────────────────────┘                           │
+│                                                             │
+│   Every 3 seconds:                                          │
+│   ├── POST /api/method/git_analyze.api.get_analysis_status  │
+│   ├── Check status field in database                        │
+│   ├── Update spinner text with progress                     │
+│   └── If "Completed" → redirect to Results page             │
+│       If "Failed" → show error, redirect after 3s           │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Phase 4: Background Analysis Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    BACKGROUND THREAD EXECUTION                      │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  Step 1: FETCH REPOSITORY FILES                                    │
+│  ─────────────────────────────                                     │
+│  ├── Connect to GitHub API (api.github.com)                        │
+│  ├── GET /repos/{owner}/{repo}/git/trees/{branch}?recursive=1     │
+│  ├── Parse file tree → filter out:                                  │
+│  │   ├── node_modules, venv, __pycache__, .git, dist, build       │
+│  │   ├── Binary files (.png, .jpg, .pdf, .zip, etc.)              │
+│  │   └── Minified files (.min.js, .min.css)                        │
+│  ├── Prioritize key files:                                         │
+│  │   ├── README.md, package.json, setup.py, pyproject.toml        │
+│  │   ├── requirements.txt, Dockerfile, docker-compose.yml         │
+│  │   ├── manage.py, app.py, main.py, index.js                     │
+│  │   └── config.py, settings.py                                    │
+│  ├── Fetch file contents (raw.githubusercontent.com)               │
+│  ├── Limit: {depth} files max                                      │
+│  └── Update status: "Fetching repository files..."                 │
+│                                                                     │
+│  Step 2: PREPARE ANALYSIS                                          │
+│  ────────────────────────                                          │
+│  ├── Build file structure string (directory tree)                  │
+│  ├── Build file contents string (code snippets)                    │
+│  ├── Truncate: structure ≤ 3000 chars, contents ≤ 15000 chars     │
+│  ├── Limit: 20 files, 5000 chars per file                          │
+│  ├── Update status: "Analyzing {N} files with AI..."              │
+│  └── Initialize Groq API client                                    │
+│                                                                     │
+│  Step 3: AI ANALYSIS                                               │
+│  ─────────────────                                                 │
+│  ├── POST to api.groq.com/openai/v1/chat/completions              │
+│  ├── Model: openai/gpt-oss-20b (or configured model)              │
+│  ├── System prompt: "You are an expert software engineer..."       │
+│  ├── User prompt: Full analysis request with:                      │
+│  │   ├── Repository name and branch                                │
+│  │   ├── File structure                                            │
+│  │   ├── File contents                                             │
+│  │   └── Request for 10 specific sections                          │
+│  ├── Timeout: 120 seconds                                          │
+│  └── Parse AI response into structured sections                    │
+│                                                                     │
+│  Step 4: PARSE & STORE RESULTS                                     │
+│  ─────────────────────────────                                     │
+│  ├── Extract 10 sections from AI output:                           │
+│  │   ├── Executive Summary (purpose)                               │
+│  │   ├── Technology Stack (tech_stack)                             │
+│  │   ├── System Architecture (architecture)                        │
+│  │   ├── Entry Points (entry_points)                               │
+│  │   ├── Core Modules (key_modules)                                │
+│  │   ├── Data Flow (data_flow)                                     │
+│  │   ├── API Endpoints (api_endpoints)                             │
+│  │   ├── Data Models (database_models)                             │
+│  │   ├── Dependencies (dependencies)                               │
+│  │   └── Deployment Guide (how_to_run)                             │
+│  ├── Calculate analysis time                                       │
+│  ├── Update status = "Completed"                                   │
+│  ├── Save all fields to database                                   │
+│  └── Commit transaction                                            │
+│                                                                     │
+│  ERROR HANDLING:                                                    │
+│  ├── If any step fails → status = "Failed"                         │
+│  ├── Store error message in full_output field                      │
+│  ├── Log error to frappe.log_error()                               │
+│  └── Cleanup: close DB connection, destroy Frappe context          │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Phase 5: Results Display
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Results Page                                               │
+│  ─────────────                                              │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │ Repository        │ Status    │ Files │ Model │ Date │    │
+│  ├───────────────────┼───────────┼───────┼───────┼──────┤    │
+│  │ owner/repo-name   │ Completed │  42   │ gpt.. │ Sep  │    │
+│  │                   │           │       │       │      │    │
+│  │ owner/other-repo  │ In Progress│  --  │ gpt.. │ Sep  │    │
+│  │                   │  ⟳        │       │       │      │    │
+│  └─────────────────────────────────────────────────────┘    │
+│                                                             │
+│  Tabs: All | Completed | In Progress | Failed               │
+│  Search: [________________] 🔍                              │
+│                                                             │
+│  Actions per row:                                           │
+│  ├── [Export] button (only for Completed)                   │
+│  └── Auto-refresh for In Progress items (every 5s)          │
+│                                                             │
+│  Export Modal:                                              │
+│  ┌─────────────────────────────────────────┐                │
+│  │  Export Analysis                        │                │
+│  │                                         │                │
+│  │  ┌──────┐ ┌──────┐ ┌──────┐            │                │
+│  │  │  📝  │ │  📄  │ │  📑  │            │                │
+│  │  │  MD  │ │ PDF  │ │ DOCX │            │                │
+│  │  └──────┘ └──────┘ └──────┘            │                │
+│  │  ┌──────┐ ┌──────┐                     │                │
+│  │  │  🌐  │ │  📊  │                     │                │
+│  │  │ HTML │ │ JSON │                     │                │
+│  │  └──────┘ └──────┘                     │                │
+│  │                                         │                │
+│  │  [Cancel]              [Download]       │                │
+│  └─────────────────────────────────────────┘                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Phase 6: Report Export
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  PROFESSIONAL REPORT STRUCTURE                               │
+│  ─────────────────────────────                               │
+│                                                             │
+│  ┌─────────────────────────────────────────┐                │
+│  │          COVER PAGE                     │                │
+│  │  ┌─────────────────────────────────┐    │                │
+│  │  │  GIT ANALYZER                   │    │                │
+│  │  │  Repository Analysis Report     │    │                │
+│  │  │                                 │    │                │
+│  │  │  owner/repo-name — main branch  │    │                │
+│  │  │                                 │    │                │
+│  │  │  ┌─────┐ ┌─────┐ ┌─────┐       │    │                │
+│  │  │  │ 42  │ │ gpt │ │ 3.2k│       │    │                │
+│  │  │  │files│ │model│ │tokens│      │    │                │
+│  │  │  └─────┘ └─────┘ └─────┘       │    │                │
+│  │  └─────────────────────────────────┘    │                │
+│  └─────────────────────────────────────────┘                │
+│                         │                                   │
+│                         ▼                                   │
+│  ┌─────────────────────────────────────────┐                │
+│  │       TABLE OF CONTENTS                 │                │
+│  │  01. Executive Summary          ▸       │                │
+│  │  02. Technology Stack           ▸       │                │
+│  │  03. System Architecture        ▸       │                │
+│  │  04. Entry Points               ▸       │                │
+│  │  05. Core Modules               ▸       │                │
+│  │  06. Data Flow                  ▸       │                │
+│  │  07. API Endpoints              ▸       │                │
+│  │  08. Data Models                ▸       │                │
+│  │  09. Dependencies               ▸       │                │
+│  │  10. Deployment Guide           ▸       │                │
+│  └─────────────────────────────────────────┘                │
+│                         │                                   │
+│                         ▼                                   │
+│  ┌─────────────────────────────────────────┐                │
+│  │       10 NUMBERED SECTIONS              │                │
+│  │  ┌─────────────────────────────────┐    │                │
+│  │  │ [01] Executive Summary          │    │                │
+│  │  │ ────────────────────────────────│    │                │
+│  │  │ [analysis content here]         │    │                │
+│  │  │ [with formatted text, bullets,  │    │                │
+│  │  │  code blocks, tables]           │    │                │
+│  │  └─────────────────────────────────┘    │                │
+│  │  ┌─────────────────────────────────┐    │                │
+│  │  │ [02] Technology Stack           │    │                │
+│  │  │ ────────────────────────────────│    │                │
+│  │  │ [Python] [React] [PostgreSQL]   │    │                │
+│  │  │ [Docker] [Redis] [Nginx]        │    │                │
+│  │  └─────────────────────────────────┘    │                │
+│  │  ... (sections 03-10)                   │                │
+│  └─────────────────────────────────────────┘                │
+│                         │                                   │
+│                         ▼                                   │
+│  ┌─────────────────────────────────────────┐                │
+│  │       APPENDIX                          │                │
+│  │  Full AI Analysis Output                │                │
+│  │  (raw markdown in collapsible block)    │                │
+│  └─────────────────────────────────────────┘                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## Features
 
-- **AI-Powered Analysis**: Analyzes any public GitHub repository using Groq LLM
-- **Multi-Format Export**: Download reports as PDF, Word (DOCX), HTML, JSON, or Markdown
-- **Professional Reports**: Cover page, table of contents, numbered sections, complexity scoring
-- **Background Processing**: Analysis runs in background threads — no page timeout
-- **Real-Time Status**: Live progress updates during analysis
-- **Portal UI**: Modern dark sidebar dashboard accessible from the web
+### Core Analysis Features
+
+| Feature | Description |
+|---------|-------------|
+| **AI-Powered Analysis** | Uses Groq LLM to analyze code structure, architecture, and patterns |
+| **GitHub Integration** | Fetches files directly from GitHub API — no clone required |
+| **Smart File Selection** | Prioritizes key files (README, package.json, config) over bulk files |
+| **Binary Filtering** | Automatically skips images, fonts, compiled files, minified code |
+| **Configurable Depth** | Shallow (50), Medium (100), Deep (200) file limits |
+| **Branch Selection** | Analyze any branch — main, develop, feature branches |
+| **Token Tracking** | Records tokens consumed per analysis |
+| **Complexity Scoring** | Auto-calculated 0-100 score based on file count, content depth |
+
+### Report Generation Features
+
+| Feature | Description |
+|---------|-------------|
+| **Cover Page** | Professional gradient header with repo name and metadata cards |
+| **Table of Contents** | Numbered section list with clickable anchors |
+| **10 Analysis Sections** | Structured sections with numbered badges |
+| **Tech Stack Badges** | Parsed technologies displayed as colored pills |
+| **Complexity Score** | Visual score indicator based on analysis metrics |
+| **Full Output Appendix** | Complete raw AI output in collapsible block |
+| **Multiple Formats** | PDF, DOCX, HTML, JSON, Markdown — one click download |
+
+### Export Format Details
+
+| Format | Features |
+|--------|----------|
+| **PDF** | A4 page size, zero margins (full bleed), cover page, section breaks, styled headings |
+| **DOCX** | Cover page, TOC page, section headings, list bullets, monospace appendix, page breaks |
+| **HTML** | Standalone styled page, gradient header, meta cards, responsive layout, tech badges |
+| **JSON** | Structured data with report metadata, repository info, analysis metrics, all sections |
+| **Markdown** | Metadata table, numbered TOC, section headers, collapsible appendix |
+
+### User Interface Features
+
+| Feature | Description |
+|---------|-------------|
+| **Dark Sidebar Navigation** | Fixed sidebar with green accent, active state indicators |
+| **Dashboard** | Stats cards (total, completed, in-progress, failed) + recent analyses |
+| **New Analysis Form** | URL input, branch selector, depth picker, optional questions |
+| **Live Progress Spinner** | Real-time status updates during analysis ("Fetching files...", "Analyzing...") |
+| **Results Table** | Sortable, searchable, filterable by status tabs |
+| **Auto-Refresh** | In-progress items poll every 5 seconds, completed items trigger page reload |
+| **Format Picker Modal** | 5 format cards with selection highlighting and download button |
+| **Toast Notifications** | Success/error messages with slide-in animation |
+| **Export Blob Download** | Direct browser download — no server file storage needed |
+
+### Backend Features
+
+| Feature | Description |
+|---------|-------------|
+| **Background Threading** | Analysis runs in daemon thread — no HTTP timeout |
+| **Thread-Safe HTTP** | Fresh requests.Session per thread — no connection sharing |
+| **Frappe Context Init** | Proper `frappe.init()` / `frappe.connect()` / `frappe.destroy()` lifecycle |
+| **Owner-Based Filtering** | Users see only their analyses; Administrator sees all |
+| **Page Cache Bypass** | `context.no_cache = 1` on all portal pages |
+| **CSRF Protection** | All API calls include Frappe CSRF token |
+| **Error Handling** | Try/catch at every layer, error stored in DB, logged to frappe.log_error() |
+| **Model Auto-Replacement** | Decommissioned Groq models auto-replaced with current default |
+
+### Settings & Configuration
+
+| Feature | Description |
+|---------|-------------|
+| **Groq API Key** | Encrypted storage via `get_password()` |
+| **Model Selection** | Choose from available Groq models (GPT OSS 20B/120B, Qwen) |
+| **Max Files Override** | Global limit on files per analysis |
+| **Output Language** | English, Spanish, French, German, Chinese, Japanese |
+| **GitHub Token** | Optional PAT for private repository access |
+| **Test Connection** | One-click API connectivity verification |
+
+### Security Features
+
+| Feature | Description |
+|---------|-------------|
+| **Permission Control** | System Manager + Website User roles on all doctypes |
+| **Owner Isolation** | Non-admin users only see their own analyses |
+| **API Key Masking** | Password fields masked in settings form |
+| **CSRF Tokens** | All state-changing API calls require valid token |
+| **No Server File Storage** | Exports generate in-memory, download directly to browser |
+
+### Workflow Summary
+
+```
+┌────────────┐     ┌────────────┐     ┌────────────┐     ┌────────────┐
+│   USER     │     │   SERVER   │     │   GITHUB   │     │   GROQ     │
+│            │     │            │     │    API     │     │    API     │
+└─────┬──────┘     └─────┬──────┘     └─────┬──────┘     └─────┬──────┘
+      │                  │                  │                  │
+      │  1. Submit URL   │                  │                  │
+      │─────────────────▶│                  │                  │
+      │                  │                  │                  │
+      │  2. Create doc   │                  │                  │
+      │  3. Start thread │                  │                  │
+      │◀─────────────────│                  │                  │
+      │                  │                  │                  │
+      │  4. Poll status  │  5. Fetch tree   │                  │
+      │─────────────────▶│─────────────────▶│                  │
+      │                  │                  │                  │
+      │                  │  6. Get files    │                  │
+      │                  │─────────────────▶│                  │
+      │                  │                  │                  │
+      │                  │  7. Send to AI   │                  │
+      │                  │─────────────────────────────────────▶
+      │                  │                  │                  │
+      │                  │  8. AI response  │                  │
+      │                  │◀─────────────────────────────────────
+      │                  │                  │                  │
+      │                  │  9. Store results│                  │
+      │                  │  10. Status=Done │                  │
+      │                  │                  │                  │
+      │  11. Redirect    │                  │                  │
+      │◀─────────────────│                  │                  │
+      │                  │                  │                  │
+      │  12. View results│                  │                  │
+      │─────────────────▶│                  │                  │
+      │                  │                  │                  │
+      │  13. Click Export│                  │                  │
+      │─────────────────▶│                  │                  │
+      │                  │  14. Generate    │                  │
+      │                  │      report      │                  │
+      │  15. Download    │                  │                  │
+      │◀─────────────────│                  │                  │
+      │                  │                  │                  │
+```
 
 ---
 
-## Installation
+## Architecture
 
-### Prerequisites
+### Doctypes
 
-- Frappe v15 running on your server
-- Site name (e.g., `ga.ogascale.com`)
-- SSH access to the server as the `frappe` user
+| Doctype | Type | Purpose |
+|---------|------|---------|
+| **Repo Analysis** | Standard | Stores each analysis result (autoname: ANALYSIS-{####}) |
+| **Analysis Settings** | Singleton | API keys, model selection, preferences |
+| **Analysis History** | Standard | Audit log of all API interactions |
 
-### Step 1: Get the Code
+### Portal Pages
 
-```bash
-cd ~/frappe-bench-v15/apps
-git clone https://github.com/Sudhakar1110/git_analyze.git
-```
+| Page | Route | Purpose |
+|------|-------|---------|
+| Dashboard | `/git-analyzer/dashboard` | Stats overview, recent analyses |
+| New Analysis | `/git-analyzer/new-analysis` | Submit URL, start analysis |
+| Results | `/git-analyzer/results` | View all analyses, export |
+| History | `/git-analyzer/history` | API call audit log |
+| Settings | `/git-analyzer/settings` | Configure API keys, preferences |
 
-### Step 2: Install Dependencies
+### API Endpoints
 
-```bash
-cd ~/frappe-bench-v15
-bench pip install python-docx
-```
-
-### Step 3: Install the App on Your Site
-
-```bash
-bench --site ga.ogascale.com install-app git_analyze
-```
-
-This runs the `after_install` hook which:
-- Creates the Workspace with sidebar links
-- Sets up default Analysis Settings
-
-### Step 4: Build Assets
-
-```bash
-bench build --app git_analyze
-```
-
-### Step 5: Restart
-
-```bash
-bench restart
-```
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `analyze_repo` | POST | Create analysis, start background thread |
+| `get_analysis_status` | POST | Poll status during analysis |
+| `get_analysis_results` | POST | Fetch full results |
+| `save_settings` | POST | Save API keys and preferences |
+| `test_groq_connection` | POST | Verify Groq API connectivity |
+| `ask_followup` | POST | Ask follow-up questions |
+| `export_as_markdown` | POST | Generate Markdown report |
+| `export_as_html` | POST | Generate HTML report |
+| `export_as_pdf` | POST | Generate PDF report |
+| `export_as_docx` | POST | Generate Word document |
+| `export_as_json` | POST | Generate JSON data |
 
 ---
 
-## Post-Installation Setup
+## Configuration
 
-### 1. Access the Portal
+### Analysis Settings Singleton
 
-Navigate to: `https://ga.ogascale.com/git-analyzer`
+| Field | Type | Description |
+|-------|------|-------------|
+| `groq_api_key` | Password | Groq API key (encrypted) |
+| `groq_model` | Select | AI model for analysis |
+| `max_files_limit` | Int | Default max files per analysis |
+| `output_language` | Select | Language for generated reports |
+| `github_token` | Password | GitHub PAT for private repos |
 
-You should see the dark sidebar with: Dashboard, New Analysis, Results, History, Settings.
+### Available Groq Models
 
-### 2. Configure API Keys
-
-Go to **Settings** page:
-
-1. Enter your **Groq API Key** (starts with `gsk_...`)
-   - Get one free at: https://console.groq.com/keys
-2. Select the **AI Model** (default: `openai/gpt-oss-20b`)
-3. Optionally add a **GitHub Personal Access Token** for private repos
-   - Generate at: https://github.com/settings/tokens
-4. Click **Save Settings**
-5. Click **Test Connection** to verify
-
-### 3. Grant Access to Users
-
-By default, only Administrator can see all analyses. To allow other users:
-
-1. Go to **Desk** → **User** → select the user
-2. Under **Roles**, add **Website User**
-3. The user can now access the portal and see their own analyses
-
----
-
-## Usage
-
-### Running an Analysis
-
-1. Click **New Analysis** in the sidebar
-2. Enter a GitHub repository URL (e.g., `https://github.com/owner/repo`)
-3. Select branch (default: `main`)
-4. Choose analysis depth:
-   - **Shallow**: Quick scan — up to 50 files
-   - **Medium**: Recommended — up to 100 files
-   - **Deep**: Full analysis — up to 200 files
-5. Click **Start Analysis**
-6. Wait for the spinner to complete (typically 1-3 minutes)
-7. You'll be redirected to Results automatically
-
-### Viewing Results
-
-Go to **Results** page:
-- See all analyses with status, file count, model used
-- Use tabs to filter: All, Completed, In Progress, Failed
-- Search by repository name or keywords
-- Click **Refresh** to reload the page
-- In-progress items auto-refresh every 5 seconds
-
-### Exporting Reports
-
-On any **Completed** analysis, click the **Export** button:
-
-A format picker modal appears with 5 options:
-
-| Format | Description | Best For |
-|--------|-------------|----------|
-| **Markdown** | `.md` file with tables and sections | GitHub READMEs, documentation |
-| **PDF** | `.pdf` A4 report with cover page | Sharing with stakeholders, printing |
-| **Word** | `.docx` editable document | Editing, adding comments |
-| **HTML** | `.html` standalone styled page | Viewing in browser, sharing via email |
-| **JSON** | `.json` structured data | Programmatic import, APIs |
-
-All exports include:
-- Cover page with repository metadata
-- Table of contents
-- 10 numbered analysis sections
-- Complexity score
-- Full AI output appendix
-
-### Understanding the Report Sections
-
-1. **Executive Summary** — What the project does and its purpose
-2. **Technology Stack** — Languages, frameworks, tools used
-3. **System Architecture** — Overall structure and design patterns
-4. **Entry Points & Boot Sequence** — How the application starts
-5. **Core Modules & Components** — Key components and their roles
-6. **Data Flow & Pipeline** — How data moves through the application
-7. **API Endpoints & Contracts** — REST APIs, routes, endpoints
-8. **Data Models & Schema** — Database models and schemas
-9. **Dependency Matrix** — External libraries and services
-10. **Deployment & Setup Guide** — How to run locally
+| Model | Description |
+|-------|-------------|
+| `openai/gpt-oss-20b` | Fast, cost-effective (default) |
+| `openai/gpt-oss-120b` | More powerful, slower |
+| `qwen/qwen3.6-27b` | Qwen 3.6 27B |
+| `qwen/qwen3.8-27b` | Qwen 3.8 27B |
 
 ---
 
 ## Troubleshooting
 
-### Analysis stays "In Progress" forever
-
-- Check server logs: `tail -f ~/frappe-bench-v15/logs/frappe.log`
-- Look for "BG Analysis failed" entries
-- Common causes: GitHub rate limiting, Groq API timeout
-
-### Export fails with "python-docx not installed"
-
-```bash
-cd ~/frappe-bench-v15
-bench pip install python-docx
-bench restart
-```
-
-### Portal page shows cached/stale data
-
-The app sets `context.no_cache = 1` on all pages. If you still see stale data:
-- Hard refresh: `Ctrl+Shift+R` (Windows) or `Cmd+Shift+R` (Mac)
-- Clear browser cache
-
-### Groq API errors
-
-- **Rate limit**: Wait a minute and retry, or add a GitHub token in Settings
-- **Decommissioned model**: The app auto-replaces old models with `openai/gpt-oss-20b`
-- **Connection error**: Check if your server can reach `api.groq.com` on port 443
-
-### Analysis shows "No files found"
-
-- Verify the repository URL is correct
-- Check that the branch name is correct (default: `main`)
-- Try with a GitHub token for private repos
-
----
-
-## File Structure
-
-```
-git_analyze/
-├── api.py                    # All API endpoints (analyze, export, settings)
-├── github_fetcher.py         # GitHub API integration
-├── groq_client.py            # Groq API integration (uses requests)
-├── hooks.py                  # Frappe hooks and route rules
-├── install.py                # After-install setup (workspace)
-├── tasks.py                  # Scheduled tasks
-├── patches.txt               # Frappe patches
-├── modules.txt               # Module definition
-├── requirements.txt          # Python dependencies
-└── templates/
-    └── pages/
-        ├── dashboard.html    # Dashboard page
-        ├── dashboard.py      # Dashboard context
-        ├── new-analysis.html # New analysis form
-        ├── new-analysis.py   # New analysis context
-        ├── results.html      # Results table with export modal
-        ├── results.py        # Results context
-        ├── history.html      # History page
-        ├── history.py        # History context
-        ├── settings.html     # Settings form
-        └── settings.py       # Settings context
-```
-
----
-
-## API Endpoints
-
-All endpoints are accessible via `POST /api/method/git_analyze.api.{function_name}`
-
-| Endpoint | Description |
-|----------|-------------|
-| `analyze_repo` | Start a new analysis (github_url, branch, depth) |
-| `get_analysis_status` | Poll analysis status |
-| `get_analysis_results` | Get full results for an analysis |
-| `save_settings` | Save API keys and preferences |
-| `test_groq_connection` | Test Groq API connectivity |
-| `ask_followup` | Ask follow-up questions about an analysis |
-| `export_as_markdown` | Export as Markdown |
-| `export_as_html` | Export as HTML |
-| `export_as_pdf` | Export as PDF |
-| `export_as_docx` | Export as Word document |
-| `export_as_json` | Export as JSON |
-
----
-
-## Updating the App
-
-```bash
-cd ~/frappe-bench-v15/apps/git_analyze
-git pull origin main
-bench build --app git_analyze
-bench restart
-```
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Analysis stays "In Progress" | Background thread failed | Check `frappe.log_error()` for "BG Analysis failed" |
+| Export fails with "python-docx not installed" | Missing dependency | Install: `bench pip install python-docx` |
+| Portal shows stale data | Browser cache | Hard refresh: Ctrl+Shift+R |
+| "No files found" error | Wrong URL or branch | Verify URL and branch name |
+| Groq API connection error | Firewall/network | Ensure port 443 to api.groq.com is open |
+| Rate limit error | Too many requests | Wait 1 minute, or add GitHub token |
+| "Decommissioned model" error | Old model selected | App auto-replaces with default model |
 
 ---
 
