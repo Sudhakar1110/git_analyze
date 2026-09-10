@@ -349,6 +349,16 @@ function doExport() {
         if (msg.error) {
             showToast(msg.error, 'error');
             closeExportModal();
+        } else if (msg.file_url) {
+            closeExportModal();
+            var link = document.createElement('a');
+            link.href = msg.file_url;
+            link.download = msg.filename || '';
+            link.target = '_blank';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(function() { showToast('Downloaded: ' + msg.filename, 'success'); }, 300);
         } else if (msg.content) {
             closeExportModal();
             if (msg.is_base64) {

@@ -6,6 +6,7 @@ import traceback
 import json
 import re
 import base64
+import html as _html_mod
 from frappe.utils import now_datetime, cint
 
 DECOMMISSIONED_MODELS = [
@@ -279,13 +280,12 @@ def _collect_sections(r):
 
 
 def _esc(text):
-    return frappe.utils.escape_html(text or "")
+    return _html_mod.escape(text or "")
 
 
 def _md_to_html(text):
     if not text:
         return ""
-    text = _esc(text)
     lines = text.split("\n")
     out = []
     in_code = False
@@ -295,23 +295,24 @@ def _md_to_html(text):
             out.append("<br>" if in_code else "")
             continue
         if in_code:
-            out.append(f'<code style="background:#1e293b;color:#e2e8f0;padding:2px 6px;border-radius:3px;font-size:12px;">{line}</code><br>')
+            out.append(f'<code>{_esc(line)}</code><br>')
             continue
-        if line.startswith("### "):
-            out.append(f'<h4 style="color:#0f172a;margin:16px 0 6px;font-size:14px;">{line[4:]}</h4>')
-        elif line.startswith("## "):
-            out.append(f'<h3 style="color:#0f172a;margin:20px 0 8px;font-size:15px;border-bottom:1px solid #e2e8f0;padding-bottom:4px;">{line[3:]}</h3>')
-        elif line.startswith("# "):
-            out.append(f'<h2 style="color:#0f172a;margin:24px 0 10px;font-size:17px;">{line[2:]}</h2>')
-        elif line.startswith("- ") or line.startswith("* "):
-            out.append(f'<div style="padding-left:16px;margin:2px 0;"><span style="color:#10b981;margin-right:6px;">&#9654;</span>{line[2:]}</div>')
-        elif line.startswith("| ") or line.startswith("|--"):
-            out.append(f'<div style="font-family:monospace;font-size:12px;color:#475569;padding:1px 0;">{line}</div>')
-        elif line.strip() == "":
+        escaped = _esc(line)
+        if escaped.startswith("### "):
+            out.append(f'<h4>{escaped[4:]}</h4>')
+        elif escaped.startswith("## "):
+            out.append(f'<h3>{escaped[3:]}</h3>')
+        elif escaped.startswith("# "):
+            out.append(f'<h2>{escaped[2:]}</h2>')
+        elif escaped.startswith("- ") or escaped.startswith("* "):
+            out.append(f'<div style="padding-left:16px;">&#9654; {escaped[2:]}</div>')
+        elif escaped.startswith("| ") or escaped.startswith("|--"):
+            out.append(f'<div style="font-family:monospace;font-size:12px;">{escaped}</div>')
+        elif escaped.strip() == "":
             out.append("<br>")
         else:
-            bolded = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', line)
-            out.append(f'<div style="margin:2px 0;">{bolded}</div>')
+            bolded = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', escaped)
+            out.append(f'<div>{bolded}</div>')
     return "\n".join(out)
 
 
@@ -569,6 +570,18 @@ def _build_professional_json(r):
 # WHITELISTED EXPORT ENDPOINTS
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _save_as_file(file_data, filename, folder="Home"):
+    file_doc = frappe.get_doc({
+        "doctype": "File",
+        "file_name": filename,
+        "is_private": 1,
+        "content": file_data,
+        "folder": folder,
+    })
+    file_doc.save(ignore_permissions=True)
+    frappe.db.commit()
+    return file_doc.file_url
+
 @frappe.whitelist()
 def export_as_markdown(repo_analysis_name):
     r = _get_analysis_data(repo_analysis_name)
@@ -603,12 +616,9 @@ def export_as_pdf(repo_analysis_name):
             "print-media-type": "",
             "enable-local-file-access": "",
         })
-        b64 = base64.b64encode(pdf).decode("utf-8")
-        return {
-            "content": b64,
-            "filename": f"{r.repo_name.replace('/', '_')}_analysis.pdf",
-            "is_base64": True,
-        }
+        filename = f"{r.repo_name.replace('/', '_')}_analysis.pdf"
+        file_url = _save_as_file(pdf, filename, "Git Analyzer Reports")
+        return {"file_url": file_url, "filename": filename}
     except Exception as e:
         frappe.throw(_("PDF generation failed: {0}").format(str(e)))
 
@@ -677,12 +687,10 @@ def export_as_docx(repo_analysis_name):
         buf = io.BytesIO()
         doc.save(buf)
         buf.seek(0)
-        b64 = base64.b64encode(buf.read()).decode("utf-8")
-        return {
-            "content": b64,
-            "filename": f"{r.repo_name.replace('/', '_')}_analysis.docx",
-            "is_base64": True,
-        }
+
+        filename = f"{r.repo_name.replace('/', '_')}_analysis.docx"
+        file_url = _save_as_file(buf.read(), filename, "Git Analyzer Reports")
+        return {"file_url": file_url, "filename": filename}
     except ImportError:
         frappe.throw(_("python-docx is not installed. Contact your server admin to run: bench pip install python-docx"))
     except Exception as e:
