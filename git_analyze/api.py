@@ -1,6 +1,7 @@
 import frappe
 from frappe import _
 import time
+import threading
 from frappe.utils import now_datetime, cint
 from git_analyze.github_fetcher import GitHubFetcher
 
@@ -41,24 +42,14 @@ def analyze_repo(github_url, branch="main", depth="medium", questions=""):
     repo_analysis.insert(ignore_permissions=True)
     frappe.db.commit()
 
-    try:
-        run_analysis(
-            repo_analysis_name=repo_analysis.name,
-            github_url=github_url,
-            branch=branch,
-            max_files=max_files,
-        )
-        repo_analysis.reload()
-        if repo_analysis.status == "Completed":
-            return {"status": "success", "repo_analysis": repo_analysis.name, "name": repo_analysis.name}
-        else:
-            return {"status": "error", "error": repo_analysis.full_output or "Analysis failed", "repo_analysis": repo_analysis.name}
-    except Exception as e:
-        frappe.db.set_value("Repo Analysis", repo_analysis.name, "status", "Failed")
-        frappe.db.set_value("Repo Analysis", repo_analysis.name, "full_output", f"Error: {str(e)}")
-        frappe.db.commit()
-        frappe.log_error(f"Analysis failed for {repo_analysis.name}: {str(e)}")
-        return {"status": "error", "error": str(e), "repo_analysis": repo_analysis.name}
+    t = threading.Thread(
+        target=run_analysis,
+        args=(repo_analysis.name, github_url, branch, max_files),
+        daemon=True,
+    )
+    t.start()
+
+    return {"status": "success", "repo_analysis": repo_analysis.name, "name": repo_analysis.name}
 
 
 @frappe.whitelist()
@@ -86,7 +77,6 @@ def run_analysis(repo_analysis_name, github_url, branch="main", max_files=100):
     settings = frappe.get_doc("Analysis Settings", "Analysis Settings")
 
     try:
-        from git_analyze.github_fetcher import GitHubFetcher
         from git_analyze.groq_client import GroqClient
 
         fetcher = GitHubFetcher(github_token=settings.get_github_token())

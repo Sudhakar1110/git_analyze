@@ -241,15 +241,13 @@ document.getElementById('analysisForm').addEventListener('submit', function(e) {
             showToast(data.message.error, 'error');
             btn.disabled = false;
             overlay.classList.remove('active');
-        } else if (data.message && data.message.status === 'success') {
-            showToast('Analysis completed!', 'success');
-            window.location.href = '/git-analyzer/results';
         } else if (data.message && data.message.repo_analysis) {
-            showToast('Analysis submitted! Checking status...', 'success');
+            showToast('Analysis started! Processing in background...', 'success');
             pollStatus(data.message.repo_analysis);
         } else {
-            showToast('Analysis started. Check results page.', 'success');
-            window.location.href = '/git-analyzer/results';
+            showToast('Analysis submitted. Check results page.', 'success');
+            btn.disabled = false;
+            overlay.classList.remove('active');
         }
     })
     .catch(function(err) {
