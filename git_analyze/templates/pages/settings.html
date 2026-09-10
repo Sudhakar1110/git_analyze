@@ -112,11 +112,10 @@ Settings
 <div class="form-group">
 <label for="groq_model">Groq Model</label>
 <select id="groq_model" name="groq_model" class="form-select">
-<option value="llama-3.1-8b-instant" {{ 'selected' if (settings.groq_model or '') == 'llama-3.1-8b-instant' }}>Llama 3.1 8B Instant</option>
-<option value="llama-3.3-70b-versatile" {{ 'selected' if (settings.groq_model or '') == 'llama-3.3-70b-versatile' }}>Llama 3.3 70B Versatile</option>
-<option value="llama3-70b-8192" {{ 'selected' if (settings.groq_model or '') == 'llama3-70b-8192' }}>Llama 3 70B 8192</option>
-<option value="mixtral-8x7b-32768" {{ 'selected' if (settings.groq_model or '') == 'mixtral-8x7b-32768' }}>Mixtral 8x7B 32768</option>
-<option value="gemma2-9b-it" {{ 'selected' if (settings.groq_model or '') == 'gemma2-9b-it' }}>Gemma 2 9B IT</option>
+<option value="openai/gpt-oss-20b" {{ 'selected' if (settings.groq_model or '') == 'openai/gpt-oss-20b' }}>GPT OSS 20B (Fast & Cheap)</option>
+<option value="openai/gpt-oss-120b" {{ 'selected' if (settings.groq_model or '') == 'openai/gpt-oss-120b' }}>GPT OSS 120B (Powerful)</option>
+<option value="qwen/qwen3.6-27b" {{ 'selected' if (settings.groq_model or '') == 'qwen/qwen3.6-27b' }}>Qwen 3.6 27B</option>
+<option value="qwen/qwen3.8-27b" {{ 'selected' if (settings.groq_model or '') == 'qwen/qwen3.8-27b' }}>Qwen 3.8 27B</option>
 </select>
 <p class="hint">Select the AI model for code analysis</p>
 </div>

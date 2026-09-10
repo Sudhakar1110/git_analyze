@@ -105,9 +105,9 @@ def _do_analysis(name, github_url, branch, max_files):
         frappe.db.commit()
         return
 
-    groq_model = settings.groq_model or "llama-3.1-8b-instant"
+    groq_model = settings.groq_model or "openai/gpt-oss-20b"
     if groq_model in DECOMMISSIONED_MODELS:
-        groq_model = "llama-3.1-8b-instant"
+        groq_model = "openai/gpt-oss-20b"
         frappe.db.set_value("Analysis Settings", "Analysis Settings", "groq_model", groq_model)
         frappe.db.commit()
 
@@ -254,7 +254,7 @@ def export_as_markdown(repo_analysis_name):
     return {"content": md, "filename": filename}
 
 
-DECOMMISSIONED_MODELS = ["llama3-8b-8192"]
+DECOMMISSIONED_MODELS = ["llama3-8b-8192", "llama-3.1-8b-instant", "llama3-70b-8192", "llama-3.3-70b-versatile", "mixtral-8x7b-32768", "gemma2-9b-it"]
 
 @frappe.whitelist()
 def test_groq_connection():
@@ -265,9 +265,9 @@ def test_groq_connection():
 
     try:
         api_key = settings.get_groq_api_key()
-        model = settings.groq_model or "llama-3.1-8b-instant"
+        model = settings.groq_model or "openai/gpt-oss-20b"
         if model in DECOMMISSIONED_MODELS:
-            model = "llama-3.1-8b-instant"
+            model = "openai/gpt-oss-20b"
             frappe.db.set_value("Analysis Settings", "Analysis Settings", "groq_model", model)
             frappe.db.commit()
         url = "https://api.groq.com/openai/v1/chat/completions"
