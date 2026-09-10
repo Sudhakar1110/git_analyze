@@ -41,17 +41,24 @@ def analyze_repo(github_url, branch="main", depth="medium", questions=""):
     repo_analysis.insert(ignore_permissions=True)
     frappe.db.commit()
 
-    frappe.enqueue(
-        "git_analyze.api.run_analysis",
-        repo_analysis_name=repo_analysis.name,
-        github_url=github_url,
-        branch=branch,
-        max_files=max_files,
-        queue="default",
-        timeout=1800,
-    )
-
-    return {"status": "success", "repo_analysis": repo_analysis.name, "name": repo_analysis.name}
+    try:
+        run_analysis(
+            repo_analysis_name=repo_analysis.name,
+            github_url=github_url,
+            branch=branch,
+            max_files=max_files,
+        )
+        repo_analysis.reload()
+        if repo_analysis.status == "Completed":
+            return {"status": "success", "repo_analysis": repo_analysis.name, "name": repo_analysis.name}
+        else:
+            return {"status": "error", "error": repo_analysis.full_output or "Analysis failed", "repo_analysis": repo_analysis.name}
+    except Exception as e:
+        frappe.db.set_value("Repo Analysis", repo_analysis.name, "status", "Failed")
+        frappe.db.set_value("Repo Analysis", repo_analysis.name, "full_output", f"Error: {str(e)}")
+        frappe.db.commit()
+        frappe.log_error(f"Analysis failed for {repo_analysis.name}: {str(e)}")
+        return {"status": "error", "error": str(e), "repo_analysis": repo_analysis.name}
 
 
 @frappe.whitelist()
@@ -89,6 +96,12 @@ def run_analysis(repo_analysis_name, github_url, branch="main", max_files=100):
             max_files=max_files,
             skip_patterns=settings.get_skip_patterns(),
         )
+
+        if not repo_data.get("files"):
+            frappe.db.set_value("Repo Analysis", repo_analysis_name, "status", "Failed")
+            frappe.db.set_value("Repo Analysis", repo_analysis_name, "full_output", "No files found in repository. Check the URL and branch.")
+            frappe.db.commit()
+            return
 
         groq_client = GroqClient(
             api_key=settings.get_groq_api_key(),
@@ -128,10 +141,11 @@ def run_analysis(repo_analysis_name, github_url, branch="main", max_files=100):
         frappe.db.commit()
 
     except Exception as e:
+        error_msg = str(e)
         frappe.db.set_value("Repo Analysis", repo_analysis_name, "status", "Failed")
+        frappe.db.set_value("Repo Analysis", repo_analysis_name, "full_output", f"Error: {error_msg}")
         frappe.db.commit()
-        frappe.log_error(f"Analysis failed: {str(e)}")
-        raise
+        frappe.log_error(f"Analysis failed for {repo_analysis_name}: {error_msg}")
 
 
 @frappe.whitelist()
@@ -164,6 +178,7 @@ def get_analysis_status(repo_analysis_name):
         "token_usage": repo_analysis.token_usage,
         "analysis_time": repo_analysis.analysis_time,
         "file_count": repo_analysis.file_count,
+        "full_output": repo_analysis.full_output,
     }
 
 
@@ -197,6 +212,10 @@ def get_analysis_results(repo_analysis_name):
 @frappe.whitelist()
 def export_as_markdown(repo_analysis_name):
     r = frappe.get_doc("Repo Analysis", repo_analysis_name)
+
+    if r.status != "Completed" or not r.full_output:
+        frappe.throw(_("Analysis is not completed yet. Export is available only for completed analyses."))
+
     md = f"# Repository Analysis: {r.repo_name}\n\n"
     md += f"**URL:** {r.github_url}\n**Branch:** {r.branch}\n\n"
     for title, content in [
@@ -209,14 +228,8 @@ def export_as_markdown(repo_analysis_name):
         if content:
             md += f"## {title}\n\n{content}\n\n"
 
+    md += f"## Full Output\n\n{r.full_output}\n\n"
+
     filename = f"{r.repo_name.replace('/', '_')}_analysis.md"
-    file_doc = frappe.get_doc({
-        "doctype": "File",
-        "file_name": filename,
-        "content": md,
-        "is_private": 0,
-        "attached_to_doctype": "Repo Analysis",
-        "attached_to_name": r.name,
-    })
-    file_doc.insert(ignore_permissions=True)
-    return {"status": "success", "file_url": file_doc.file_url, "file_name": file_doc.file_name}
+
+    return {"content": md, "filename": filename}

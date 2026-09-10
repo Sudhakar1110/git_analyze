@@ -229,7 +229,7 @@ function exportAnalysis(name) {
             'Content-Type': 'application/json',
             'X-Frappe-CSRF-Token': '{{ frappe.session.csrf_token or "" }}'
         },
-        body: JSON.stringify({ analysis_name: name })
+        body: JSON.stringify({ repo_analysis_name: name })
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -250,7 +250,7 @@ function exportAnalysis(name) {
             showToast('Export completed', 'success');
         }
     })
-    .catch(function() {
+    .catch(function(err) {
         showToast('Export failed. Please try again.', 'error');
     });
 }
