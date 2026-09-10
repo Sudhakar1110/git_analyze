@@ -242,7 +242,7 @@ document.getElementById('analysisForm').addEventListener('submit', function(e) {
             btn.disabled = false;
             overlay.classList.remove('active');
         } else if (data.message && data.message.repo_analysis) {
-            showToast('Analysis started! Processing in background...', 'success');
+            showToast('Analysis started! Processing...', 'success');
             pollStatus(data.message.repo_analysis);
         } else {
             showToast('Analysis submitted. Check results page.', 'success');
