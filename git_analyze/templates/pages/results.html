@@ -231,27 +231,31 @@ function exportAnalysis(name) {
         },
         body: JSON.stringify({ repo_analysis_name: name })
     })
-    .then(function(r) { return r.json(); })
+    .then(function(r) {
+        if (!r.ok) throw new Error('Server error');
+        return r.json();
+    })
     .then(function(data) {
-        if (data.message && data.message.error) {
-            showToast(data.message.error, 'error');
-        } else if (data.message && data.message.content) {
-            var blob = new Blob([data.message.content], { type: 'text/markdown' });
+        var msg = data.message || data;
+        if (msg && msg.error) {
+            showToast(msg.error, 'error');
+        } else if (msg && msg.content) {
+            var blob = new Blob([msg.content], { type: 'text/markdown;charset=utf-8' });
             var url = URL.createObjectURL(blob);
             var a = document.createElement('a');
             a.href = url;
-            a.download = (data.message.filename || name) + '.md';
+            a.download = (msg.filename || name) + '.md';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             showToast('Export downloaded!', 'success');
         } else {
-            showToast('Export completed', 'success');
+            showToast('No content to export', 'error');
         }
     })
     .catch(function(err) {
-        showToast('Export failed. Please try again.', 'error');
+        showToast('Export failed: ' + err.message, 'error');
     });
 }
 </script>
