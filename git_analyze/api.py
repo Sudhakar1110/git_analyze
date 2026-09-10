@@ -13,6 +13,8 @@ try:
     from docx.shared import Pt, RGBColor, Cm
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.enum.table import WD_TABLE_ALIGNMENT
+    from docx.oxml.ns import qn as _qn
+    from docx.oxml import OxmlElement as _OxmlElement
     HAS_DOCX = True
 except ImportError:
     HAS_DOCX = False
@@ -744,8 +746,6 @@ def export_as_docx(repo_analysis_name, client_name=None, author=None, date_range
         return {"error": "python-docx is not installed. Run: bench pip install python-docx"}
     try:
         from docx import Document
-        from docx.oxml.ns import qn
-        from docx.oxml import OxmlElement
         import io
 
         doc = Document()
@@ -914,19 +914,19 @@ def _add_docx_toc_field(doc):
 
     p = doc.add_paragraph()
     run = p.add_run()
-    fld_char_begin = OxmlElement("w:fldChar")
-    fld_char_begin.set(qn("w:fldCharType"), "begin")
+    fld_char_begin = _OxmlElement("w:fldChar")
+    fld_char_begin.set(_qn("w:fldCharType"), "begin")
     run._r.append(fld_char_begin)
 
     run2 = p.add_run()
-    instr = OxmlElement("w:instrText")
-    instr.set(qn("xml:space"), "preserve")
+    instr = _OxmlElement("w:instrText")
+    instr.set(_qn("xml:space"), "preserve")
     instr.text = ' TOC \\o "1-3" \\h \\z \\u '
     run2._r.append(instr)
 
     run3 = p.add_run()
-    fld_char_sep = OxmlElement("w:fldChar")
-    fld_char_sep.set(qn("w:fldCharType"), "separate")
+    fld_char_sep = _OxmlElement("w:fldChar")
+    fld_char_sep.set(_qn("w:fldCharType"), "separate")
     run3._r.append(fld_char_sep)
 
     run4 = p.add_run("[Right-click and select 'Update Field' to populate Table of Contents]")
@@ -935,8 +935,8 @@ def _add_docx_toc_field(doc):
     run4.font.size = Pt(10)
 
     run5 = p.add_run()
-    fld_char_end = OxmlElement("w:fldChar")
-    fld_char_end.set(qn("w:fldCharType"), "end")
+    fld_char_end = _OxmlElement("w:fldChar")
+    fld_char_end.set(_qn("w:fldCharType"), "end")
     run5._r.append(fld_char_end)
 
     doc.add_paragraph("")
@@ -1024,18 +1024,16 @@ def _add_docx_analysis_overview(doc, r):
 
 def _style_docx_table(table, headers=None):
     try:
-        from docx.oxml.ns import qn
-        from docx.oxml import OxmlElement
         tbl = table._tbl
-        tbl_pr = tbl.tblPr if tbl.tblPr is not None else OxmlElement("w:tblPr")
+        tbl_pr = tbl.tblPr if tbl.tblPr is not None else __OxmlElement("w:tblPr")
 
-        borders = OxmlElement("w:tblBorders")
+        borders = _OxmlElement("w:tblBorders")
         for border_name in ["top", "left", "bottom", "right", "insideH", "insideV"]:
-            border = OxmlElement(f"w:{border_name}")
-            border.set(qn("w:val"), "single")
-            border.set(qn("w:sz"), "4")
-            border.set(qn("w:space"), "0")
-            border.set(qn("w:color"), "CBD5E1")
+            border = _OxmlElement(f"w:{border_name}")
+            border.set(_qn("w:val"), "single")
+            border.set(_qn("w:sz"), "4")
+            border.set(_qn("w:space"), "0")
+            border.set(_qn("w:color"), "CBD5E1")
             borders.append(border)
         tbl_pr.append(borders)
 
@@ -1043,9 +1041,9 @@ def _style_docx_table(table, headers=None):
             for i, cell in enumerate(table.rows[0].cells):
                 if i < len(headers):
                     cell.text = headers[i]
-                shading = OxmlElement("w:shd")
-                shading.set(qn("w:fill"), "F1F5F9")
-                shading.set(qn("w:val"), "clear")
+                shading = _OxmlElement("w:shd")
+                shading.set(_qn("w:fill"), "F1F5F9")
+                shading.set(_qn("w:val"), "clear")
                 cell._tc.get_or_add_tcPr().append(shading)
                 for para in cell.paragraphs:
                     for run in para.runs:
@@ -1058,15 +1056,13 @@ def _style_docx_table(table, headers=None):
 
 def _add_docx_comment(doc, comment_text):
     try:
-        from docx.oxml.ns import qn
-        from docx.oxml import OxmlElement
-        comment = OxmlElement("w:comment")
-        comment.set(qn("w:id"), "0")
-        comment.set(qn("w:author"), "Git Analyzer")
-        comment.set(qn("w:date"), str(now_datetime()))
-        p = OxmlElement("w:p")
-        r = OxmlElement("w:r")
-        t = OxmlElement("w:t")
+        comment = _OxmlElement("w:comment")
+        comment.set(_qn("w:id"), "0")
+        comment.set(_qn("w:author"), "Git Analyzer")
+        comment.set(_qn("w:date"), str(now_datetime()))
+        p = _OxmlElement("w:p")
+        r = _OxmlElement("w:r")
+        t = _OxmlElement("w:t")
         t.text = comment_text
         r.append(t)
         p.append(r)
@@ -1078,7 +1074,7 @@ def _add_docx_comment(doc, comment_text):
             from docx.opc.packuri import PackURI
             import lxml.etree as etree
 
-            comments_xml = etree.Element(qn("w:comments"))
+            comments_xml = etree.Element(_qn("w:comments"))
             comments_xml.append(comment)
 
             part_name = PackURI("/word/comments.xml")
@@ -1097,10 +1093,8 @@ def _add_docx_comment(doc, comment_text):
 
 def _enable_track_changes(doc):
     try:
-        from docx.oxml.ns import qn
-        from docx.oxml import OxmlElement
         settings = doc.settings.element
-        track = OxmlElement("w:trackRevisions")
+        track = _OxmlElement("w:trackRevisions")
         settings.append(track)
     except Exception:
         pass
