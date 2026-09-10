@@ -1,10 +1,12 @@
 import frappe
 import time
+import requests
 from typing import Dict, Optional
-from groq import Groq
 
 
 class GroqClient:
+    GROQ_API_BASE = "https://api.groq.com/openai/v1"
+
     ANALYSIS_PROMPT = """Analyze this GitHub repository and provide a comprehensive analysis.
 
 Repository: {repo_name}
@@ -32,8 +34,25 @@ Provide the analysis in {language} language.
 Format the output in clean Markdown with proper sections."""
 
     def __init__(self, api_key: str, model: str = "llama3-8b-8192"):
-        self.client = Groq(api_key=api_key, timeout=120.0)
+        self.api_key = api_key
         self.model = model
+        self.session = requests.Session()
+        self.session.headers.update({
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        })
+
+    def _chat_completion(self, messages, temperature=0.3, max_tokens=4096):
+        url = f"{self.GROQ_API_BASE}/chat/completions"
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        response = self.session.post(url, json=payload, timeout=120)
+        response.raise_for_status()
+        return response.json()
 
     def analyze_repository(self, repo_name: str, branch: str,
                            file_structure: str, file_contents: Dict[str, str],
@@ -52,8 +71,7 @@ Format the output in clean Markdown with proper sections."""
             language=language,
         )
 
-        response = self.client.chat.completions.create(
-            model=self.model,
+        data = self._chat_completion(
             messages=[
                 {"role": "system", "content": "You are an expert software engineer. Analyze code repositories thoroughly."},
                 {"role": "user", "content": prompt},
@@ -62,11 +80,12 @@ Format the output in clean Markdown with proper sections."""
             max_tokens=4096,
         )
 
-        content = response.choices[0].message.content
+        content = data["choices"][0]["message"]["content"]
+        usage = data.get("usage", {})
         token_usage = {
-            "prompt_tokens": response.usage.prompt_tokens,
-            "completion_tokens": response.usage.completion_tokens,
-            "total_tokens": response.usage.total_tokens,
+            "prompt_tokens": usage.get("prompt_tokens", 0),
+            "completion_tokens": usage.get("completion_tokens", 0),
+            "total_tokens": usage.get("total_tokens", 0),
         }
         return {"content": content, "token_usage": token_usage, "model": self.model}
 
@@ -80,8 +99,7 @@ Previous analysis:
 
 Provide a detailed answer in {language}:"""
 
-        response = self.client.chat.completions.create(
-            model=self.model,
+        data = self._chat_completion(
             messages=[
                 {"role": "system", "content": "Answer questions about code repositories."},
                 {"role": "user", "content": prompt},
@@ -91,8 +109,8 @@ Provide a detailed answer in {language}:"""
         )
 
         return {
-            "content": response.choices[0].message.content,
-            "token_usage": {"total_tokens": response.usage.total_tokens},
+            "content": data["choices"][0]["message"]["content"],
+            "token_usage": {"total_tokens": data.get("usage", {}).get("total_tokens", 0)},
             "model": self.model,
         }
 

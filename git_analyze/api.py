@@ -250,18 +250,24 @@ def export_as_markdown(repo_analysis_name):
 
 @frappe.whitelist()
 def test_groq_connection():
+    import requests as req
     settings = frappe.get_doc("Analysis Settings", "Analysis Settings")
     if not settings.groq_api_key:
         return {"status": "error", "error": "No Groq API key configured"}
 
     try:
-        from groq import Groq
-        client = Groq(api_key=settings.get_groq_api_key(), timeout=15.0)
-        response = client.chat.completions.create(
-            model=settings.groq_model or "llama3-8b-8192",
-            messages=[{"role": "user", "content": "Say OK"}],
-            max_tokens=5,
-        )
-        return {"status": "ok", "model": settings.groq_model, "response": response.choices[0].message.content}
+        api_key = settings.get_groq_api_key()
+        model = settings.groq_model or "llama3-8b-8192"
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        payload = {"model": model, "messages": [{"role": "user", "content": "Say OK"}], "max_tokens": 5}
+        r = req.post(url, json=payload, headers=headers, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+        return {"status": "ok", "model": model, "response": data["choices"][0]["message"]["content"]}
+    except req.exceptions.ConnectionError:
+        return {"status": "error", "error": "Cannot reach api.groq.com - server firewall or network issue. Contact your server admin to allow outbound HTTPS to api.groq.com:443"}
+    except req.exceptions.Timeout:
+        return {"status": "error", "error": "Connection timed out - api.groq.com is too slow or blocked"}
     except Exception as e:
         return {"status": "error", "error": f"{type(e).__name__}: {str(e)}"}
