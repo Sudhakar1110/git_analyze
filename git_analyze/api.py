@@ -649,7 +649,7 @@ def export_as_pdf(repo_analysis_name):
             "enable-local-file-access": "",
         })
         filename = f"{r.repo_name.replace('/', '_')}_analysis.pdf"
-        file_url = _save_as_file(pdf, filename, "Git Analyzer Reports")
+        file_url = _save_as_file(pdf, filename, "Home")
         return {"file_url": file_url, "filename": filename}
     except ImportError:
         return {"error": "wkhtmltopdf is not installed on the server."}
@@ -708,7 +708,7 @@ def export_as_docx(repo_analysis_name):
 
             body = doc.add_paragraph()
             body.paragraph_format.space_before = Pt(8)
-            _add_styled_content(body, sections[key])
+            _add_styled_content(doc, sections[key])
 
             if i < len(SECTION_ORDER) - 1:
                 doc.add_page_break()
@@ -721,7 +721,7 @@ def export_as_docx(repo_analysis_name):
         buf.seek(0)
 
         filename = f"{r.repo_name.replace('/', '_')}_analysis.docx"
-        file_url = _save_as_file(buf.read(), filename, "Git Analyzer Reports")
+        file_url = _save_as_file(buf.read(), filename, "Home")
         return {"file_url": file_url, "filename": filename}
     except ImportError:
         return {"error": "python-docx is not installed. Run: bench pip install python-docx"}
@@ -843,7 +843,7 @@ def _add_docx_appendix(doc, r):
     run.font.color.rgb = RGBColor(148, 163, 184)
 
 
-def _add_styled_content(para, text):
+def _add_styled_content(doc, text):
     if not text:
         return
     lines = text.split("\n")
@@ -852,25 +852,25 @@ def _add_styled_content(para, text):
         if not line:
             continue
         if line.startswith("### "):
-            p = para.add_paragraph()
+            p = doc.add_paragraph()
             run = p.add_run(line[4:])
             run.font.size = Pt(12)
             run.font.bold = True
             run.font.color.rgb = RGBColor(15, 23, 42)
         elif line.startswith("## "):
-            p = para.add_paragraph()
+            p = doc.add_paragraph()
             run = p.add_run(line[3:])
             run.font.size = Pt(13)
             run.font.bold = True
             run.font.color.rgb = RGBColor(15, 23, 42)
         elif line.startswith("# "):
-            p = para.add_paragraph()
+            p = doc.add_paragraph()
             run = p.add_run(line[2:])
             run.font.size = Pt(14)
             run.font.bold = True
             run.font.color.rgb = RGBColor(15, 23, 42)
         elif line.startswith("- ") or line.startswith("* "):
-            p = para.add_paragraph(style="List Bullet")
+            p = doc.add_paragraph(style="List Bullet")
             p.add_run(line[2:])
         else:
             clean = re.sub(r'\*\*(.+?)\*\*', r'\1', line)
