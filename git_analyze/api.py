@@ -262,7 +262,9 @@ def test_groq_connection():
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         payload = {"model": model, "messages": [{"role": "user", "content": "Say OK"}], "max_tokens": 5}
         r = req.post(url, json=payload, headers=headers, timeout=30)
-        r.raise_for_status()
+        if r.status_code != 200:
+            error_detail = r.json().get("error", {}).get("message", r.text[:200])
+            return {"status": "error", "error": f"Groq API error ({r.status_code}): {error_detail}"}
         data = r.json()
         return {"status": "ok", "model": model, "response": data["choices"][0]["message"]["content"]}
     except req.exceptions.ConnectionError:
