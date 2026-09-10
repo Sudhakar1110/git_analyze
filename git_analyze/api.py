@@ -62,15 +62,15 @@ def _bg_run(site, name, url, branch, max_files):
         frappe.set_user("Administrator")
         _do_analysis(name, url, branch, max_files)
     except Exception as e:
-        error_msg = str(e)
+        error_msg = f"{type(e).__name__}: {str(e)}"
         try:
             frappe.db.set_value("Repo Analysis", name, "status", "Failed")
-            frappe.db.set_value("Repo Analysis", name, "full_output", f"Error: {error_msg}")
+            frappe.db.set_value("Repo Analysis", name, "full_output", error_msg)
             frappe.db.commit()
         except Exception:
             pass
         try:
-            frappe.log_error(f"Background analysis failed for {name}: {error_msg}\n{traceback.format_exc()}")
+            frappe.log_error(f"Analysis failed for {name}: {error_msg}\n{traceback.format_exc()}")
         except Exception:
             pass
     finally:
@@ -101,7 +101,7 @@ def _do_analysis(name, github_url, branch, max_files):
 
     if not repo_data.get("files"):
         frappe.db.set_value("Repo Analysis", name, "status", "Failed")
-        frappe.db.set_value("Repo Analysis", name, "full_output", "No files found. Check the URL and branch.")
+        frappe.db.set_value("Repo Analysis", name, "full_output", "No files found. Check URL and branch.")
         frappe.db.commit()
         return
 
@@ -246,3 +246,22 @@ def export_as_markdown(repo_analysis_name):
     filename = f"{r.repo_name.replace('/', '_')}_analysis.md"
 
     return {"content": md, "filename": filename}
+
+
+@frappe.whitelist()
+def test_groq_connection():
+    settings = frappe.get_doc("Analysis Settings", "Analysis Settings")
+    if not settings.groq_api_key:
+        return {"status": "error", "error": "No Groq API key configured"}
+
+    try:
+        from groq import Groq
+        client = Groq(api_key=settings.get_groq_api_key(), timeout=15.0)
+        response = client.chat.completions.create(
+            model=settings.groq_model or "llama3-8b-8192",
+            messages=[{"role": "user", "content": "Say OK"}],
+            max_tokens=5,
+        )
+        return {"status": "ok", "model": settings.groq_model, "response": response.choices[0].message.content}
+    except Exception as e:
+        return {"status": "error", "error": f"{type(e).__name__}: {str(e)}"}

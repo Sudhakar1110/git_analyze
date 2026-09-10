@@ -163,6 +163,10 @@ Settings
 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
 Save Settings
 </button>
+<button type="button" class="btn btn-secondary" id="testBtn" style="margin-left:8px">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+Test Connection
+</button>
 </div>
 </div>
 </div>
@@ -212,6 +216,36 @@ document.getElementById('settingsForm').addEventListener('submit', function(e) {
     .catch(function() {
         showToast('Failed to save settings. Please try again.', 'error');
         btn.disabled = false;
+    });
+});
+
+document.getElementById('testBtn').addEventListener('click', function() {
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = 'Testing...';
+
+    fetch('/api/method/git_analyze.api.test_groq_connection', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Frappe-CSRF-Token': '{{ frappe.session.csrf_token or "" }}'
+        }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        var msg = data.message || data;
+        if (msg.status === 'ok') {
+            showToast('Connection OK! Model: ' + (msg.model || 'default'), 'success');
+        } else {
+            showToast('Failed: ' + (msg.error || 'Unknown error'), 'error');
+        }
+        btn.disabled = false;
+        btn.textContent = 'Test Connection';
+    })
+    .catch(function() {
+        showToast('Connection test failed.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Test Connection';
     });
 });
 </script>
